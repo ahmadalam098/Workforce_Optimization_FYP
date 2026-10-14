@@ -21,6 +21,7 @@ import PageHeader from '../components/PageHeader.jsx'
 import { EmptyState, ErrorState } from '../components/StateBox.jsx'
 import { ActiveBadge, AvailabilityBadge } from '../components/StatusBadge.jsx'
 import { useFlashNotice } from '../../../hooks/useFlashNotice.js'
+import DeleteForever from '../components/DeleteForever.jsx'
 import ViewButton from '../components/ViewButton.jsx'
 
 const PAGE_SIZE = 10
@@ -275,6 +276,18 @@ function EmployeesPage() {
                           >
                             <Icon name={employee.isActive ? 'ban' : 'checkCircle'} size={17} />
                           </button>
+                          {!employee.isActive && (
+                            <DeleteForever
+                              name={employee.fullName}
+                              title="Delete employee completely?"
+                              message={`${employee.fullName} and their sign-in account will be removed for good, with their skills, shift and salary set-up. This cannot be undone. An employee who has allocations, payroll, overtime or reviews cannot be deleted because those records must be kept.`}
+                              onDelete={() => employeesApi.remove(employee.employeeId)}
+                              onDone={(message) => {
+                                setNotice(message)
+                                reload()
+                              }}
+                            />
+                          )}
                         </div>
                       </td>
                     </tr>

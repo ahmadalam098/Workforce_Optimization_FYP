@@ -103,6 +103,15 @@ namespace fyp_project.Controllers.Admin
             return Ok(new { message = makeActive ? "Rule activated." : "Rule deactivated.", ruleId, isActive = makeActive });
         }
 
+        // DELETE api/admin/payment-rules/5   (a deactivated rule that is not built in)
+        [HttpDelete("api/admin/payment-rules/{ruleId:int}")]
+        public async Task<IActionResult> DeleteRule(int ruleId, [FromServices] EntityDeletion deletion)
+        {
+            var result = await deletion.DeletePaymentRuleAsync(ruleId);
+            if (result.Ok) await _audit.LogAsync(CurrentUserId, "PAYMENT_RULE_DELETED", "PaymentRule", ruleId, result.Name);
+            return DeleteAnswer(result);
+        }
+
         // ---------------- exchange rates ----------------
 
         // GET api/admin/exchange-rates

@@ -599,7 +599,19 @@ namespace fyp_project.Controllers.Admin
             return Ok(new { message = "Employee updated successfully." + emailNote, employeeId, userId = user.UserId });
         }
 
-        // PATCH api/admin/employees/5/active   (employees are deactivated, never deleted, to keep history intact)
+        // DELETE api/admin/employees/5   (a deactivated employee and their account; refused while allocations, payroll, overtime or reviews exist)
+        [HttpDelete("{employeeId:int}")]
+        public async Task<IActionResult> Delete(int employeeId, [FromServices] EntityDeletion deletion)
+        {
+            var result = await deletion.DeleteEmployeeAsync(employeeId);
+            if (!result.Ok) return DeleteAnswer(result);
+
+            await _audit.LogAsync(CurrentUserId, "EMPLOYEE_DELETED", "Employee", employeeId, $"Deleted {result.Name} ({result.Email})");
+            var emailNote = await _mailer.SendPersonDeletedAsync(CurrentUserId, 0, result.Name, result.Email, result.Role);
+            return DeleteAnswer(result, emailNote);
+        }
+
+        // PATCH api/admin/employees/5/active   (deactivate first; a deactivated employee can then be deleted with DELETE)
         [HttpPatch("{employeeId:int}/active")]
         public async Task<IActionResult> SetActive(int employeeId, [FromBody] SetActiveRequest request)
         {

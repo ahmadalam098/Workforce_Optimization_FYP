@@ -128,6 +128,15 @@ namespace fyp_project.Controllers.Admin
             return Ok(new { message = "Skill updated.", skillId });
         }
 
+        // DELETE api/admin/skills/5   (a deactivated skill; refused while a staff request asks for it)
+        [HttpDelete("{skillId:int}")]
+        public async Task<IActionResult> Delete(int skillId, [FromServices] EntityDeletion deletion)
+        {
+            var result = await deletion.DeleteSkillAsync(skillId);
+            if (result.Ok) await _audit.LogAsync(CurrentUserId, "SKILL_DELETED", "Skill", skillId, result.Name);
+            return DeleteAnswer(result);
+        }
+
         // PATCH api/admin/skills/5/active
         [HttpPatch("{skillId:int}/active")]
         public async Task<IActionResult> SetActive(int skillId, [FromBody] SetActiveRequest request)

@@ -36,6 +36,12 @@ namespace fyp_project.Controllers.Admin
                 errors = new Dictionary<string, string[]> { [field] = new[] { message } },
             });
 
+        /// <summary>The answer for a permanent delete: the message, and what blocked it when it was refused.</summary>
+        protected IActionResult DeleteAnswer(fyp_project.Services.DeleteResult result, string emailNote = "") =>
+            result.Ok
+                ? Ok(new { message = result.Message + emailNote })
+                : StatusCode(result.Status, new { message = result.Message, blockers = result.Blockers });
+
         protected IActionResult NotFoundMessage(string message) => NotFound(new { message });
 
         protected IActionResult ConflictMessage(string message) => Conflict(new { message });

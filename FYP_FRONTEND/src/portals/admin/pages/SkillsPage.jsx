@@ -18,6 +18,7 @@ import { EmptyState, ErrorState } from '../components/StateBox.jsx'
 import { ActiveBadge } from '../components/StatusBadge.jsx'
 import { useFlashNotice } from '../../../hooks/useFlashNotice.js'
 import SkillDetailsModal from '../components/SkillDetailsModal.jsx'
+import DeleteForever from '../components/DeleteForever.jsx'
 import ViewButton from '../components/ViewButton.jsx'
 
 const PAGE_SIZE = 10
@@ -184,6 +185,18 @@ function SkillsPage() {
                           >
                             <Icon name={skill.isActive ? 'ban' : 'checkCircle'} size={17} />
                           </button>
+                          {!skill.isActive && (
+                            <DeleteForever
+                              name={skill.name}
+                              title="Delete skill completely?"
+                              message={`${skill.name} will be removed for good, and employees lose it from their skill list. This cannot be undone. A skill that a staff request asks for cannot be deleted.`}
+                              onDelete={() => skillsApi.remove(skill.skillId)}
+                              onDone={(message) => {
+                                setNotice(message)
+                                reload()
+                              }}
+                            />
+                          )}
                         </div>
                       </td>
                     </tr>

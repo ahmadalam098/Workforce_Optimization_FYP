@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import Badge from '../../../components/ui/Badge.jsx'
+import DeleteForever from '../components/DeleteForever.jsx'
 import ProfilePhotoEditor from '../../../components/ProfilePhotoEditor.jsx'
 import Avatar from '../../../components/ui/Avatar.jsx'
 import Button from '../../../components/ui/Button.jsx'
@@ -31,6 +32,7 @@ function InfoItem({ label, children }) {
 
 function EmployeeDetailsPage() {
   const { employeeId } = useParams()
+  const navigate = useNavigate()
   const [editing, setEditing] = useState(false)
   const [toggling, setToggling] = useState(false)
   const [skillTarget, setSkillTarget] = useState(null) // null | 'new' | skill
@@ -113,6 +115,16 @@ function EmployeeDetailsPage() {
           <Button variant="secondary" onClick={() => setToggling(true)}>
             <Icon name={employee.isActive ? 'ban' : 'checkCircle'} size={17} /> {employee.isActive ? 'Deactivate' : 'Activate'}
           </Button>
+          {!employee.isActive && (
+            <DeleteForever
+              look="button"
+              name={employee.fullName}
+              title="Delete employee completely?"
+              message={`${employee.fullName} and their sign-in account will be removed for good, with their skills, shift and salary set-up. This cannot be undone. An employee who has allocations, payroll, overtime or reviews cannot be deleted because those records must be kept.`}
+              onDelete={() => employeesApi.remove(employee.employeeId)}
+              onDone={(message) => navigate('/admin/employees', { replace: true, state: { message } })}
+            />
+          )}
         </div>
       </section>
 

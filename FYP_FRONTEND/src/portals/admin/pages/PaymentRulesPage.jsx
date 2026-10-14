@@ -8,6 +8,7 @@ import Spinner from '../../../components/ui/Spinner.jsx'
 import { useFetch } from '../../../hooks/useFetch.js'
 import { exchangeRatesApi, paymentRulesApi } from '../../../services/adminService.js'
 import { formatDate } from '../../../utils/format.js'
+import DeleteForever from '../components/DeleteForever.jsx'
 import Notice from '../components/Notice.jsx'
 import PageHeader from '../components/PageHeader.jsx'
 import { ExchangeRateModal, PaymentRuleModal } from '../components/PaymentRuleModals.jsx'
@@ -117,6 +118,18 @@ function PaymentRulesPage() {
                             <button type="button" className={`icon-btn ${rule.isActive ? 'icon-btn--danger' : ''}`} onClick={() => setToggleTarget(rule)} aria-label={`${rule.isActive ? 'Deactivate' : 'Activate'} ${rule.title}`} title={rule.isActive ? 'Deactivate' : 'Activate'}>
                               <Icon name={rule.isActive ? 'ban' : 'checkCircle'} size={17} />
                             </button>
+                          )}
+                          {!rule.isSystem && !rule.isActive && (
+                            <DeleteForever
+                              name={rule.title}
+                              title="Delete rule completely?"
+                              message={`${rule.title} will be removed for good. This cannot be undone.`}
+                              onDelete={() => paymentRulesApi.remove(rule.ruleId)}
+                              onDone={(message) => {
+                                setNotice(message)
+                                rules.reload()
+                              }}
+                            />
                           )}
                         </div>
                       </td>

@@ -190,6 +190,18 @@ namespace fyp_project.Controllers.Admin
             return Ok(new { message = "User updated." + emailNote, userId });
         }
 
+        // DELETE api/admin/users/5   (a deactivated admin, business owner or organization manager; real history is kept, see EntityDeletion)
+        [HttpDelete("{userId:int}")]
+        public async Task<IActionResult> Delete(int userId, [FromServices] EntityDeletion deletion)
+        {
+            var result = await deletion.DeleteUserAsync(userId, CurrentUserId);
+            if (!result.Ok) return DeleteAnswer(result);
+
+            await _audit.LogAsync(CurrentUserId, "USER_DELETED", "User", userId, $"Deleted {result.Name} ({result.Email}, {result.Role})");
+            var emailNote = await _mailer.SendPersonDeletedAsync(CurrentUserId, userId, result.Name, result.Email, result.Role);
+            return DeleteAnswer(result, emailNote);
+        }
+
         // PATCH api/admin/users/5/active
         [HttpPatch("{userId:int}/active")]
         public async Task<IActionResult> SetActive(int userId, [FromBody] SetActiveRequest request)

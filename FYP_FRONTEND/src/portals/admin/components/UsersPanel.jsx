@@ -22,6 +22,7 @@ import { ActiveBadge } from './StatusBadge.jsx'
 import UserFormModal from './UserFormModal.jsx'
 import { useFlashNotice } from '../../../hooks/useFlashNotice.js'
 import UserDetailsModal from './UserDetailsModal.jsx'
+import DeleteForever from './DeleteForever.jsx'
 import ViewButton from './ViewButton.jsx'
 
 const PAGE_SIZE = 10
@@ -204,6 +205,18 @@ function UsersPanel({ kind }) {
                             >
                               <Icon name={person.isActive ? 'ban' : 'checkCircle'} size={17} />
                             </button>
+                            {!person.isActive && !isSelf && (
+                              <DeleteForever
+                                name={person.fullName}
+                                title={`Delete ${noun} completely?`}
+                                message={`${person.fullName} will be removed for good. Records they created (invoices, tickets, audit entries ...) are kept, but no longer show who made them. This cannot be undone.`}
+                                onDelete={() => usersApi.remove(person.userId)}
+                                onDone={(message) => {
+                                  setNotice(message)
+                                  reload()
+                                }}
+                              />
+                            )}
                           </div>
                         </td>
                       </tr>
