@@ -47,8 +47,6 @@ export const skillsApi = {
   categories: (signal) => apiRequest('/api/admin/skills/categories', { signal }),
   create: (body) => apiRequest('/api/admin/skills', { method: 'POST', body }),
   update: (skillId, body) => apiRequest(`/api/admin/skills/${skillId}`, { method: 'PUT', body }),
-  /** Permanent delete of a deactivated skill. Refused (409, the message says why) while a staff request asks for it. */
-  remove: (skillId) => apiRequest(`/api/admin/skills/${skillId}`, { method: 'DELETE' }),
   setActive: (skillId, isActive) => apiRequest(`/api/admin/skills/${skillId}/active`, { method: 'PATCH', body: { isActive } }),
 }
 
@@ -149,8 +147,6 @@ export const paymentRulesApi = {
   list: (signal) => apiRequest('/api/admin/payment-rules', { signal }),
   create: (body) => apiRequest('/api/admin/payment-rules', { method: 'POST', body }),
   update: (ruleId, body) => apiRequest(`/api/admin/payment-rules/${ruleId}`, { method: 'PUT', body }),
-  /** Permanent delete of a deactivated rule that is not built in. */
-  remove: (ruleId) => apiRequest(`/api/admin/payment-rules/${ruleId}`, { method: 'DELETE' }),
   setActive: (ruleId, isActive) => apiRequest(`/api/admin/payment-rules/${ruleId}/active`, { method: 'PATCH', body: { isActive } }),
 }
 
@@ -191,8 +187,6 @@ export const employeesApi = {
   get: (employeeId, signal) => apiRequest(`/api/admin/employees/${employeeId}`, { signal }),
   create: (body) => apiRequest('/api/admin/employees', { method: 'POST', body }),
   update: (employeeId, body) => apiRequest(`/api/admin/employees/${employeeId}`, { method: 'PUT', body }),
-  /** Permanent delete of a deactivated employee and their account. Refused (409) while allocations, payroll, overtime or reviews exist. */
-  remove: (employeeId) => apiRequest(`/api/admin/employees/${employeeId}`, { method: 'DELETE' }),
   setActive: (employeeId, isActive, reason) =>
     apiRequest(`/api/admin/employees/${employeeId}/active`, { method: 'PATCH', body: { isActive, reason } }),
   resetPassword: (employeeId, newPassword) =>
@@ -205,8 +199,6 @@ export const usersApi = {
   list: (params, signal) => apiRequest('/api/admin/users', { params, signal }),
   create: (body) => apiRequest('/api/admin/users', { method: 'POST', body }),
   update: (userId, body) => apiRequest(`/api/admin/users/${userId}`, { method: 'PUT', body }),
-  /** Permanent delete of a deactivated admin, business owner or organization manager. */
-  remove: (userId) => apiRequest(`/api/admin/users/${userId}`, { method: 'DELETE' }),
   setActive: (userId, isActive, reason) =>
     apiRequest(`/api/admin/users/${userId}/active`, { method: 'PATCH', body: { isActive, reason } }),
   resetPassword: (userId, newPassword) =>

@@ -314,10 +314,3 @@ All Admin only. Values are stored as text in System_Setting (no new table).
 - Notifications: NOTIFY_EMAIL (off = no account, organization or query emails), NOTIFY_INAPP, NOTIFY_WORKFORCE, NOTIFY_CONTRACT_EXPIRY_DAYS. `GET /api/admin/notifications` also returns `enabled` and `alerts` (active contracts ending soon).
 - Removed on request: the Security, Backup & Data and Workforce & AI tabs, the logo, the system name, the staff request limits (now fixed at 100 employees and 90 days) and the test email.
 
-
-### Delete completely (deactivated items only)
-All return 409 with a readable `message` (and `blockers`) when refused; success writes an audit entry (`*_DELETED`).
-- `DELETE /api/admin/users/{id}` - deactivated admin / business owner / organization manager (not yourself, not an employee account). Records they created are kept with the author link cleared; their notification marker and manager links are removed. The person is emailed.
-- `DELETE /api/admin/employees/{id}` - deactivated employee + their account, with skills, shift, status history and salary set-up. Refused while allocations, allocation history, payroll, overtime or reviews exist.
-- `DELETE /api/admin/skills/{id}` - deactivated skill; employees lose it. Refused while a staff request asks for it.
-- `DELETE /api/admin/payment-rules/{id}` - deactivated, non-built-in rule.

@@ -50,7 +50,6 @@ builder.Services.AddSingleton<RedisService>();
 
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<AccountMailer>();
-builder.Services.AddScoped<EntityDeletion>();
 
 builder.Services.AddScoped<TokenService>();
 

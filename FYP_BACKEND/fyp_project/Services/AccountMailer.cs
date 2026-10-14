@@ -135,10 +135,6 @@ namespace fyp_project.Services
             return (subject, Layout(organization, new[] { text + Note(note) }, rows));
         }
 
-        public static (string Subject, string Html) PersonDeletedMessage(string name, string email, string roleLabel) =>
-            ("Your WorkForce Nexus account has been deleted",
-            Layout(name, new[] { "Your <strong>WorkForce Nexus</strong> account has been <strong>permanently deleted</strong> by our administrator. You can no longer sign in.", "If you think this is a mistake, please contact your administrator." }, new[] { ("Role", roleLabel), ("Sign-in email", email) }));
-
         /// <summary>Sent to the OLD address when the sign-in email of an account is changed.</summary>
         public static (string Subject, string Html) EmailChangedMessage(string name, string oldEmail, string newEmail) =>
             ("The sign-in email of your WorkForce Nexus account was changed",
@@ -189,14 +185,6 @@ namespace fyp_project.Services
             var (subject, html) = WelcomeMessage(name, email, roleLabel, organizations, details);
             var note = await SendAsync(actorUserId, "ACCOUNT", "User", userId, email, subject, html, "Welcome");
             return note.Replace("An email was sent", "A welcome email was sent").Replace("The email to", "The welcome email to");
-        }
-
-        /// <summary>Tells a person that their account was deleted. The account is already gone, so the details are passed in.</summary>
-        public async Task<string> SendPersonDeletedAsync(int? actorUserId, int userId, string? name, string? email, string? roleLabel)
-        {
-            if (string.IsNullOrWhiteSpace(email)) return string.Empty;
-            var (subject, html) = PersonDeletedMessage(name ?? "there", email, roleLabel ?? "Staff");
-            return await SendAsync(actorUserId, "ACCOUNT", "User", userId, email, subject, html, "Deleted");
         }
 
         /// <summary>Tells a person (employee, admin, business owner, organization manager) what happened to their account.</summary>
