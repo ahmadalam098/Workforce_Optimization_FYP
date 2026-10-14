@@ -1,0 +1,70 @@
+.assign-list {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.assign-list__item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--sand-100);
+  color: var(--text);
+  transition: none; /* hover and focus change at once, with no delay */
+  cursor: pointer;
+}
+
+/* Hovering gives a clear warm highlight, so the row is easy to see and never turns plain white */
+.assign-list__item:hover:not(.is-disabled) {
+  border-color: var(--gold-600);
+  background: var(--gold-50);
+}
+
+.assign-list__item:focus-within {
+  border-color: var(--gold-600);
+  box-shadow: var(--focus-ring);
+}
+
+.assign-list__item.is-checked {
+  border-color: var(--gold-600);
+  background: #ffecb3;
+  font-weight: 600;
+}
+
+.assign-list__item.is-checked:hover:not(.is-disabled) {
+  background: #ffe499;
+}
+
+.assign-list__item.is-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.assign-list__item input {
+  accent-color: var(--gold-600);
+  width: 1.05rem;
+  height: 1.05rem;
+  cursor: inherit;
+}
+
+.assign-list__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 0.9rem;
+}
+
+.assign-list__text .cell-muted {
+  font-size: 0.78rem;
+}
+
+.assign-list__tag {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}

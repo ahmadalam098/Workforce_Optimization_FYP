@@ -1,0 +1,129 @@
+.auth-layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 44%) 1fr;
+  min-height: 100vh;
+}
+
+.auth-layout__brand {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 2rem;
+  padding: 2.5rem 3rem;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 85% 15%, rgba(242, 183, 5, 0.14), transparent 45%),
+    linear-gradient(160deg, var(--navy-800), var(--navy-950));
+  color: #ffffff;
+}
+
+.auth-layout__hero {
+  max-width: 26rem;
+}
+
+.auth-layout__title {
+  font-size: clamp(2rem, 3vw, 2.6rem);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.auth-layout__title span {
+  color: var(--gold-400);
+}
+
+.auth-layout__subtitle {
+  margin-top: 0.75rem;
+  font-size: 1.05rem;
+  color: var(--navy-200);
+}
+
+.auth-layout__highlights {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  margin: 2rem 0 0;
+  padding: 0;
+  list-style: none;
+  color: #e6ecf5;
+  font-size: 0.95rem;
+}
+
+.auth-layout__highlights li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.auth-layout__highlight-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: var(--radius-md);
+  background: rgba(242, 183, 5, 0.14);
+  color: var(--gold-400);
+}
+
+.auth-layout__network {
+  width: 100%;
+  max-width: 22rem;
+}
+
+.auth-layout__footer {
+  font-size: 0.8rem;
+  color: var(--navy-300);
+}
+
+.auth-layout__main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 2.5rem 1.5rem;
+  background:
+    radial-gradient(circle at 80% 0%, rgba(255, 217, 138, 0.45), transparent 45%),
+    linear-gradient(180deg, #ece8e1 0%, var(--bg) 100%);
+}
+
+.auth-layout__mobile-logo {
+  display: none;
+}
+
+.auth-layout__card {
+  width: 100%;
+  max-width: 27rem;
+  padding: 2.5rem 2.25rem;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-xl);
+  background: var(--card);
+  box-shadow: var(--shadow-card), var(--shadow-md);
+}
+
+@media (max-width: 900px) {
+  .auth-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-layout__brand {
+    display: none;
+  }
+
+  .auth-layout__mobile-logo {
+    display: block;
+  }
+}
+
+@media (max-width: 480px) {
+  .auth-layout__main {
+    justify-content: flex-start;
+    padding: 1.5rem 1rem;
+  }
+
+  .auth-layout__card {
+    padding: 1.75rem 1.25rem;
+  }
+}

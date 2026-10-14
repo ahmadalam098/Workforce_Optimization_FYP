@@ -1,0 +1,46 @@
+/* A dialog drawn as a page section (see pageMode.js) */
+.form-page {
+  max-width: 56rem;
+}
+
+.form-page--sm {
+  max-width: 34rem;
+}
+
+.form-page__header {
+  padding: 1.5rem 1.75rem 0;
+}
+
+.form-page__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 500;
+  color: var(--navy-900);
+}
+
+.form-page__subtitle {
+  margin: 0.35rem 0 0;
+  color: var(--text-muted);
+}
+
+.form-page__body {
+  padding: 1.25rem 1.75rem 1.5rem;
+}
+
+.form-page__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  padding: 1rem 1.75rem;
+  border-top: 1px solid var(--sand-300);
+}
+
+@media (max-width: 640px) {
+  .form-page__header,
+  .form-page__body,
+  .form-page__footer {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}

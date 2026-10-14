@@ -1,0 +1,58 @@
+/* Shared styles for the auth portal pages. */
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.auth-form__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.auth-form__link {
+  font-size: 0.875rem;
+}
+
+.auth-form__footer {
+  margin-top: 1.5rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.auth-form__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+}
+
+.auth-form__email {
+  font-weight: 600;
+  color: var(--navy-800);
+  word-break: break-all;
+}
+
+.auth-form__email--below-header {
+  margin: -1.25rem 0 1.5rem;
+}
+
+.otp-input {
+  letter-spacing: 0.6em;
+  text-align: center;
+  font-size: 1.35rem !important;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.auth-form__resend {
+  display: flex;
+  justify-content: center;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}

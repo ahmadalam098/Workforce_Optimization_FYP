@@ -1,0 +1,85 @@
+.live-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.availability-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+}
+
+.availability-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.95rem 1.1rem;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.availability-tile:hover {
+  transform: translateY(-1px);
+}
+
+.availability-tile:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.availability-tile.is-active {
+  border-color: var(--gold-600);
+  background: var(--gold-50);
+}
+
+.availability-tile--static {
+  cursor: default;
+}
+
+.availability-tile--static:hover {
+  transform: none;
+}
+
+.availability-tile.is-alert {
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
+}
+
+.availability-tile__value {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 300;
+  line-height: 1;
+  color: var(--navy-900);
+}
+
+.availability-tile__label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.availability-tile__dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+}
+
+.availability-updated {
+  margin: 0;
+  padding: 0 1.25rem 0.9rem;
+  font-size: 0.75rem;
+  color: var(--text-subtle);
+}

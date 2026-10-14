@@ -1,0 +1,77 @@
+.textarea-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.textarea-field__label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.textarea-field__input {
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.925rem;
+  line-height: 1.5;
+  resize: vertical;
+  transition: none; /* hover and focus change at once, with no delay */
+}
+
+.textarea-field__input:focus {
+  outline: none;
+  border-color: var(--gold-600);
+  box-shadow: var(--focus-ring);
+}
+
+.textarea-field--error .textarea-field__input {
+  border-color: var(--danger);
+}
+
+.textarea-field__error,
+.textarea-field__hint {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.textarea-field__error {
+  color: var(--danger);
+}
+
+.textarea-field__hint {
+  color: var(--text-muted);
+}
+
+/* Hover: warm highlight so it is clear which box you are about to use */
+.textarea-field__input:hover:not(:disabled):not(:focus) {
+  border-color: var(--gold-600);
+  background: var(--gold-50);
+}
+
+/* Typing: clean white with the gold ring */
+.textarea-field__input:focus {
+  background: var(--surface);
+}
+
+.textarea-field__input:disabled {
+  background: var(--sand-200);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+/* A box with an error keeps its red border while hovered */
+.textarea-field--error .textarea-field__input:hover:not(:disabled):not(:focus) {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.field__required {
+  color: var(--danger);
+  font-weight: 700;
+}

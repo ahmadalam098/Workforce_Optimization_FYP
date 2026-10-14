@@ -1,0 +1,147 @@
+.role-select {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.role-select__label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.role-select__button {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 2.875rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.role-select__button:hover {
+  border-color: var(--navy-300);
+}
+
+.role-select__button:focus-visible,
+.role-select__button.is-open {
+  outline: none;
+  border-color: var(--gold-600);
+  box-shadow: var(--focus-ring);
+}
+
+.role-select__lead {
+  color: var(--text-subtle);
+}
+
+.role-select__value {
+  flex: 1;
+  font-weight: 500;
+}
+
+.role-select__placeholder {
+  flex: 1;
+  color: var(--text-subtle);
+}
+
+.role-select__chevron {
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+
+.role-select__button.is-open .role-select__chevron {
+  transform: rotate(180deg);
+}
+
+.role-select__list {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin: 0;
+  padding: 0.35rem;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  outline: none;
+}
+
+.role-select__option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.role-select__option.is-active {
+  background: var(--cream-100);
+}
+
+.role-select__option.is-selected .role-select__option-label {
+  color: var(--navy-800);
+}
+
+.role-select__option.is-disabled {
+  cursor: not-allowed;
+}
+
+.role-select__option.is-disabled .role-select__option-text {
+  opacity: 0.55;
+}
+
+.role-select__option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.role-select__option-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.role-select__option-desc {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.role-select__check {
+  color: var(--gold-700);
+}
+
+.role-select__badge {
+  flex-shrink: 0;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: var(--cream-200);
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.role-select--error .role-select__button {
+  border-color: var(--danger);
+}
+
+.role-select__error {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--danger);
+}

@@ -1,0 +1,51 @@
+.finance-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 1rem;
+}
+
+.finance-tile {
+  padding: 1.1rem 1.3rem;
+}
+
+.finance-tile--danger {
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
+}
+
+.finance-tile--gold {
+  border-color: var(--gold-600);
+  background: var(--gold-50);
+}
+
+.finance-tile__label {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.finance-tile__value {
+  margin: 0.45rem 0 0;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 400;
+  line-height: 1.2;
+  color: var(--navy-900);
+  white-space: nowrap;
+}
+
+.finance-tile__value--text {
+  font-size: 1.15rem;
+  white-space: normal;
+}
+
+.finance-tile--danger .finance-tile__value {
+  color: var(--danger-text);
+}
+
+.finance-tile__caption {
+  margin: 0.4rem 0 0;
+  font-size: 0.78rem;
+  color: var(--text-subtle);
+}

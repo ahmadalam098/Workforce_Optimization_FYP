@@ -1,0 +1,12 @@
+# Secrets and local files - never commit
+appsettings.json
+appsettings.Development.json
+.env
+*.user
+node_modules/
+dist/
+bin/
+obj/
+.vs/
+uploads/
+backups/

@@ -1,0 +1,72 @@
+/* WorkForceNexus design tokens: warm off-white, gold/yellow, deep navy. */
+:root {
+  /* Navy */
+  --navy-950: #071528;
+  --navy-900: #0b1f3a;
+  --navy-800: #12294a;
+  --navy-700: #1b3560;
+  --navy-600: #284a7e;
+  --navy-300: #8fa3c2;
+  --navy-200: #b9c6db;
+  --navy-50: #eef2f8;
+
+  /* Gold */
+  --gold-300: #ffd98a;
+  --gold-400: #f7c948;
+  --gold-500: #f2b705;
+  --gold-600: #dba503;
+  --gold-700: #8a6414;
+  --gold-50: #fff6dd;
+
+  /* Warm off-white / sand */
+  --cream-50: #fbf8f1;
+  --cream-100: #f5efe2;
+  --cream-200: #ece4d3;
+  --sand-100: #f3f0ea;
+  --sand-200: #e9e5de;
+  --sand-300: #ddd8ce;
+
+  /* Surfaces */
+  --bg: #e9e5de;
+  --surface: #ffffff;
+  --card: #f4f1eb;
+  --card-border: rgba(255, 255, 255, 0.75);
+  --text: #26231f;
+  --text-muted: #62594d;
+  --text-subtle: #8a8275;
+  --border: #e2dccf;
+  --border-strong: #cfc7b5;
+  --link: #1b4fa0;
+
+  /* Semantic */
+  --danger: #b3392b;
+  --danger-soft: #fdecea;
+  --danger-border: #f5c2bc;
+  --danger-text: #8f2318;
+  --success: #1e8e5a;
+  --success-soft: #e7f6ee;
+  --success-border: #b6e2c9;
+  --success-text: #13603c;
+  --warning-soft: #fff3d6;
+  --warning-border: #f2d995;
+  --warning-text: #7a5300;
+  --info-soft: #eaf1fd;
+  --info-border: #bfd3f6;
+  --info-text: #1c4587;
+
+  /* Shape and depth */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --shadow-sm: 0 1px 2px rgba(60, 45, 20, 0.06);
+  --shadow-md: 0 6px 20px rgba(60, 45, 20, 0.08);
+  --shadow-lg: 0 18px 44px rgba(40, 30, 10, 0.18);
+  --shadow-card: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 10px 28px rgba(84, 66, 30, 0.07);
+  --focus-ring: 0 0 0 3px rgba(242, 183, 5, 0.45);
+
+  --gradient-gold: linear-gradient(135deg, #ffd98a 0%, #f2bb55 55%, #e3a23a 100%);
+
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  --font-display: 'Outfit', 'Inter', system-ui, sans-serif;
+}

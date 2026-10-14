@@ -1,0 +1,47 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge__dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.badge--success {
+  background: var(--success-soft);
+  color: var(--success-text);
+}
+
+.badge--info {
+  background: var(--info-soft);
+  color: var(--info-text);
+}
+
+.badge--warning {
+  background: var(--warning-soft);
+  color: var(--warning-text);
+}
+
+.badge--danger {
+  background: var(--danger-soft);
+  color: var(--danger-text);
+}
+
+.badge--neutral {
+  background: var(--sand-200);
+  color: var(--text-muted);
+}
+
+.badge--gold {
+  background: var(--gold-50);
+  color: var(--gold-700);
+}

@@ -1,0 +1,53 @@
+.checkbox {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.checkbox__input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.checkbox__box {
+  display: grid;
+  place-items: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 5px;
+  background: var(--surface);
+  color: transparent;
+  transition: none; /* hover and focus change at once, with no delay */
+}
+
+/* Hover: the box and the text warm up so it is clear what will be clicked */
+.checkbox:hover .checkbox__box {
+  border-color: var(--gold-600);
+  background: var(--gold-50);
+}
+
+.checkbox:hover {
+  color: var(--text);
+}
+
+.checkbox__input:checked + .checkbox__box {
+  background: var(--gold-500);
+  border-color: var(--gold-600);
+  color: var(--navy-900);
+}
+
+.checkbox:hover .checkbox__input:checked + .checkbox__box {
+  background: var(--gold-600);
+}
+
+.checkbox__input:focus-visible + .checkbox__box {
+  box-shadow: var(--focus-ring);
+}
