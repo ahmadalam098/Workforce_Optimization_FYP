@@ -6,11 +6,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace fyp_project.Controllers.Admin
 {
-    /// <summary>Admin portal: Organization Managers and the organizations they handle (max 5 each).</summary>
+    /// <summary>Admin portal: Organization Managers and the organizations they handle (one or as many as the admin gives).</summary>
     [Route("api/admin/managers")]
     public class AdminManagersController : AdminControllerBase
     {
-        private const int MaxOrganizationsPerManager = 5;
 
         private readonly WorkforceManagementDbContext _db;
         private readonly IdGenerator _ids;
@@ -98,8 +97,6 @@ namespace fyp_project.Controllers.Admin
 
             if (PasswordProblem(request.Password) is { } passwordError) return FieldError("password", passwordError);
             if (CnicProblem(cnic) is { } cnicError) return FieldError("cnic", cnicError);
-            if (organizationIds.Count > MaxOrganizationsPerManager)
-                return FieldError("organizationIds", $"A manager can handle at most {MaxOrganizationsPerManager} organizations.");
 
             var existingOrgs = await _db.Organizations.CountAsync(o => organizationIds.Contains(o.OrgId));
             if (existingOrgs != organizationIds.Count)
@@ -157,8 +154,6 @@ namespace fyp_project.Controllers.Admin
         {
             var organizationIds = request.OrganizationIds.Distinct().ToList();
 
-            if (organizationIds.Count > MaxOrganizationsPerManager)
-                return FieldError("organizationIds", $"A manager can handle at most {MaxOrganizationsPerManager} organizations.");
 
             var roleIds = await _roles.FindRoleIdsAsync(RoleNames.OrganizationManager);
             var isManager = await _db.Users.AnyAsync(u => u.UserId == userId && u.RoleId != null && roleIds.Contains(u.RoleId.Value));

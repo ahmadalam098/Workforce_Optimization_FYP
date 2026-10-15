@@ -27,6 +27,9 @@ namespace fyp_project.DTOs.Admin
         public string? Reference { get; set; }
         public string? Notes { get; set; }
         public string? RecordedBy { get; set; }
+        /// <summary>When the organization manager verified this payment, and who.</summary>
+        public DateTime? VerifiedAt { get; set; }
+        public string? VerifiedBy { get; set; }
     }
 
     public class InvoiceListItemDto
@@ -56,6 +59,9 @@ namespace fyp_project.DTOs.Admin
         public string? Notes { get; set; }
         public string? CancelReason { get; set; }
         public DateTime CreatedAt { get; set; }
+        /// <summary>When the organization manager verified the invoice, and who.</summary>
+        public DateTime? VerifiedAt { get; set; }
+        public string? VerifiedBy { get; set; }
         public List<InvoiceLineDto> Lines { get; set; } = new();
         public List<InvoicePaymentDto> Payments { get; set; } = new();
     }

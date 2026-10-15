@@ -8,3 +8,9 @@ export const QUERY_STATUS_OPTIONS = [
 ]
 
 export const QUERY_CATEGORY_OPTIONS = ['Query', 'Complaint', 'Payment', 'Technical', 'Allocation', 'Other'].map((value) => ({ value, label: value }))
+
+/** What an Organization Manager can log or filter: queries and complaints. */
+export const TICKET_TYPE_OPTIONS = [
+  { value: 'Query', label: 'Query' },
+  { value: 'Complaint', label: 'Complaint' },
+]

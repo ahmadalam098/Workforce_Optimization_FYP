@@ -82,7 +82,7 @@ namespace fyp_project.DTOs.Admin
 
     public class CreateManagerRequest : CreateUserRequest
     {
-        /// <summary>Up to 5 organizations this manager will handle.</summary>
+        /// <summary>The organizations this manager will handle (one or as many as needed).</summary>
         public List<int> OrganizationIds { get; set; } = new();
     }
 

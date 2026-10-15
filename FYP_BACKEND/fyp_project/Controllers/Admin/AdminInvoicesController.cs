@@ -115,7 +115,10 @@ namespace fyp_project.Controllers.Admin
             var lines = await _db.InvoiceLines.AsNoTracking().Where(l => l.InvoiceId == invoiceId).OrderBy(l => l.LineId).ToListAsync();
             var payments = await _db.InvoicePayments.AsNoTracking().Where(p => p.InvoiceId == invoiceId).OrderByDescending(p => p.PaidAt).ToListAsync();
 
-            var userIds = payments.Where(p => p.RecordedBy.HasValue).Select(p => p.RecordedBy!.Value).Distinct().ToList();
+            var userIds = payments.Where(p => p.RecordedBy.HasValue).Select(p => p.RecordedBy!.Value)
+                .Concat(payments.Where(p => p.VerifiedBy.HasValue).Select(p => p.VerifiedBy!.Value))
+                .Concat(invoice.VerifiedBy.HasValue ? new[] { invoice.VerifiedBy.Value } : Array.Empty<int>())
+                .Distinct().ToList();
             var names = await _db.Users.AsNoTracking().Where(u => userIds.Contains(u.UserId)).ToDictionaryAsync(u => u.UserId, u => u.Name);
 
             return new InvoiceDetailDto
@@ -139,6 +142,8 @@ namespace fyp_project.Controllers.Admin
                 Notes = invoice.Notes,
                 CancelReason = invoice.CancelReason,
                 CreatedAt = invoice.CreatedAt,
+                VerifiedAt = invoice.VerifiedAt,
+                VerifiedBy = invoice.VerifiedBy.HasValue ? names.GetValueOrDefault(invoice.VerifiedBy.Value) : null,
                 Lines = lines.Select(l => new InvoiceLineDto
                 {
                     LineId = l.LineId, LineType = l.LineType, Description = l.Description,
@@ -149,6 +154,8 @@ namespace fyp_project.Controllers.Admin
                     PaymentId = p.PaymentId, Amount = p.Amount, Currency = p.Currency, ExchangeRate = p.ExchangeRate,
                     AmountPkr = p.AmountPkr, PaidAt = p.PaidAt, Method = p.Method, Reference = p.Reference, Notes = p.Notes,
                     RecordedBy = p.RecordedBy.HasValue ? names.GetValueOrDefault(p.RecordedBy.Value) : null,
+                    VerifiedAt = p.VerifiedAt,
+                    VerifiedBy = p.VerifiedBy.HasValue ? names.GetValueOrDefault(p.VerifiedBy.Value) : null,
                 }).ToList(),
             };
         }

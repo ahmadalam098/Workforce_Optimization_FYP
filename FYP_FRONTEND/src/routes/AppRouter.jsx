@@ -12,37 +12,53 @@ import ResetPasswordPage from '../portals/auth/pages/ResetPasswordPage.jsx'
 import NotFoundPage from '../portals/common/NotFoundPage.jsx'
 
 // The Admin portal is loaded on demand, so the login page stays small and fast.
-const AdminLayout = lazy(() => import('../layouts/AdminLayout.jsx'))
-const page = (name) => lazy(() => import(`../portals/admin/pages/${name}.jsx`))
+const AdminLayout = lazy(() => import('../portals/admin/layout/AdminLayout.jsx'))
+const ManagerLayout = lazy(() => import('../portals/manager/layout/ManagerLayout.jsx'))
+const ManagerDashboardPage = lazy(() => import('../portals/manager/dashboard/ManagerDashboardPage.jsx'))
+const ManagerInvoicesPage = lazy(() => import('../portals/manager/billing/ManagerInvoicesPage.jsx'))
+const ManagerInvoiceDetailsPage = lazy(() => import('../portals/manager/billing/ManagerInvoiceDetailsPage.jsx'))
+const ManagerPaymentsPage = lazy(() => import('../portals/manager/billing/ManagerPaymentsPage.jsx'))
+const ManagerSettingsPage = lazy(() => import('../portals/manager/settings/ManagerSettingsPage.jsx'))
+const ManagerChatPage = lazy(() => import('../portals/manager/chat/ManagerChatPage.jsx'))
+const ManagerQueriesPage = lazy(() => import('../portals/manager/queries/ManagerQueriesPage.jsx'))
+const ManagerQueryDetailsPage = lazy(() => import('../portals/manager/queries/ManagerQueryDetailsPage.jsx'))
+const ManagerPerformancePage = lazy(() => import('../portals/manager/performance/ManagerPerformancePage.jsx'))
+const ManagerOrganizationsPage = lazy(() => import('../portals/manager/organizations/ManagerOrganizationsPage.jsx'))
+const ManagerOrganizationDetailsPage = lazy(() => import('../portals/manager/organizations/ManagerOrganizationDetailsPage.jsx'))
+const ManagerEmployeeDetailsPage = lazy(() => import('../portals/manager/employees/ManagerEmployeeDetailsPage.jsx'))
+const ManagerSalariesPage = lazy(() => import('../portals/manager/salaries/ManagerSalariesPage.jsx'))
+const ManagerRequestsPage = lazy(() => import('../portals/manager/requests/ManagerRequestsPage.jsx'))
+const ManagerRequestDetailsPage = lazy(() => import('../portals/manager/requests/ManagerRequestDetailsPage.jsx'))
+const ManagerEmployeePoolPage = lazy(() => import('../portals/manager/allocations/ManagerEmployeePoolPage.jsx'))
 
-const AdminDashboardPage = page('AdminDashboardPage')
-const OrganizationsPage = page('OrganizationsPage')
-const OrganizationDetailsPage = page('OrganizationDetailsPage')
-const ContractsPage = page('ContractsPage')
-const ContractDetailsPage = page('ContractDetailsPage')
-const EmployeesPage = page('EmployeesPage')
-const EmployeeDetailsPage = page('EmployeeDetailsPage')
-const SkillsPage = page('SkillsPage')
-const ShiftsPage = page('ShiftsPage')
-const ShiftDetailsPage = page('ShiftDetailsPage')
-const TeamPage = page('TeamPage')
-const AllocationsPage = page('AllocationsPage')
-const AllocationHistoryPage = page('AllocationHistoryPage')
-const AvailabilityPage = page('AvailabilityPage')
-const InvoicesPage = page('InvoicesPage')
-const InvoiceDetailsPage = page('InvoiceDetailsPage')
-const SalariesPage = page('SalariesPage')
-const PayrollPage = page('PayrollPage')
-const PayrollDetailsPage = page('PayrollDetailsPage')
-const PaymentRulesPage = page('PaymentRulesPage')
-const TicketsPage = page('TicketsPage')
-const TicketDetailsPage = page('TicketDetailsPage')
-const AuditLogsPage = page('AuditLogsPage')
-const ReportsPage = page('ReportsPage')
-const StaffRequestsPage = page('StaffRequestsPage')
-const StaffRequestDetailsPage = page('StaffRequestDetailsPage')
-const SettingsPage = page('SettingsPage')
-const NewItemPage = page('NewItemPage')
+const AdminDashboardPage = lazy(() => import('../portals/admin/dashboard/AdminDashboardPage.jsx'))
+const OrganizationsPage = lazy(() => import('../portals/admin/organizations/OrganizationsPage.jsx'))
+const OrganizationDetailsPage = lazy(() => import('../portals/admin/organizations/OrganizationDetailsPage.jsx'))
+const ContractsPage = lazy(() => import('../portals/admin/contracts/ContractsPage.jsx'))
+const ContractDetailsPage = lazy(() => import('../portals/admin/contracts/ContractDetailsPage.jsx'))
+const EmployeesPage = lazy(() => import('../portals/admin/employees/EmployeesPage.jsx'))
+const EmployeeDetailsPage = lazy(() => import('../portals/admin/employees/EmployeeDetailsPage.jsx'))
+const SkillsPage = lazy(() => import('../portals/admin/skills/SkillsPage.jsx'))
+const ShiftsPage = lazy(() => import('../portals/admin/shifts/ShiftsPage.jsx'))
+const ShiftDetailsPage = lazy(() => import('../portals/admin/shifts/ShiftDetailsPage.jsx'))
+const TeamPage = lazy(() => import('../portals/admin/team/TeamPage.jsx'))
+const AllocationsPage = lazy(() => import('../portals/admin/allocations/AllocationsPage.jsx'))
+const AllocationHistoryPage = lazy(() => import('../portals/admin/allocations/AllocationHistoryPage.jsx'))
+const AvailabilityPage = lazy(() => import('../portals/admin/allocations/AvailabilityPage.jsx'))
+const InvoicesPage = lazy(() => import('../portals/admin/finance/InvoicesPage.jsx'))
+const InvoiceDetailsPage = lazy(() => import('../portals/admin/finance/InvoiceDetailsPage.jsx'))
+const SalariesPage = lazy(() => import('../portals/admin/finance/SalariesPage.jsx'))
+const PayrollPage = lazy(() => import('../portals/admin/finance/PayrollPage.jsx'))
+const PayrollDetailsPage = lazy(() => import('../portals/admin/finance/PayrollDetailsPage.jsx'))
+const PaymentRulesPage = lazy(() => import('../portals/admin/finance/PaymentRulesPage.jsx'))
+const TicketsPage = lazy(() => import('../portals/admin/queries/TicketsPage.jsx'))
+const TicketDetailsPage = lazy(() => import('../portals/admin/queries/TicketDetailsPage.jsx'))
+const AuditLogsPage = lazy(() => import('../portals/admin/audit/AuditLogsPage.jsx'))
+const ReportsPage = lazy(() => import('../portals/admin/reports/ReportsPage.jsx'))
+const StaffRequestsPage = lazy(() => import('../portals/admin/requests/StaffRequestsPage.jsx'))
+const StaffRequestDetailsPage = lazy(() => import('../portals/admin/requests/StaffRequestDetailsPage.jsx'))
+const SettingsPage = lazy(() => import('../portals/admin/settings/SettingsPage.jsx'))
+const NewItemPage = lazy(() => import('../portals/admin/new-item/NewItemPage.jsx'))
 
 function AppRouter() {
   return (
@@ -109,6 +125,28 @@ function AppRouter() {
             <Route path="payroll/new" element={<NewItemPage type="payroll" />} />
             <Route path="payroll/new-overtime" element={<NewItemPage type="overtime" />} />
             <Route path="invoices/new" element={<NewItemPage type="invoice" />} />
+          </Route>
+        </Route>
+
+        <Route element={<ProtectedRoute roles={[ROLES.ORGANIZATION_MANAGER]} />}>
+          <Route path="/manager" element={<ManagerLayout />}>
+            <Route index element={<Navigate to="dashboard" replace />} />
+            <Route path="dashboard" element={<ManagerDashboardPage />} />
+            <Route path="employee-pool" element={<ManagerEmployeePoolPage />} />
+            <Route path="requests" element={<ManagerRequestsPage />} />
+            <Route path="requests/:requestId" element={<ManagerRequestDetailsPage />} />
+            <Route path="salaries" element={<ManagerSalariesPage />} />
+            <Route path="employees/:employeeId" element={<ManagerEmployeeDetailsPage />} />
+            <Route path="organizations" element={<ManagerOrganizationsPage />} />
+            <Route path="organizations/:orgId" element={<ManagerOrganizationDetailsPage />} />
+            <Route path="chat" element={<ManagerChatPage />} />
+            <Route path="performance" element={<ManagerPerformancePage />} />
+            <Route path="queries" element={<ManagerQueriesPage />} />
+            <Route path="queries/:ticketId" element={<ManagerQueryDetailsPage />} />
+            <Route path="invoices" element={<ManagerInvoicesPage />} />
+            <Route path="invoices/:invoiceId" element={<ManagerInvoiceDetailsPage />} />
+            <Route path="payments" element={<ManagerPaymentsPage />} />
+            <Route path="settings" element={<ManagerSettingsPage />} />
           </Route>
         </Route>
 

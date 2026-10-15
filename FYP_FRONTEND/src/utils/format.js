@@ -62,6 +62,23 @@ export function formatDateTime(value) {
   return `${dateText(date, zoneOf(false))}, ${timeText(date, zoneOf(false))}`
 }
 
+/** Just the time of day, in the style chosen in Settings (used by the chat bubbles). */
+export function formatTime(value) {
+  const date = toDate(value)
+  return date ? timeText(date, zoneOf(false)) : ''
+}
+
+/** "Today", "Yesterday" or the date (chat day separators). */
+export function formatDay(value) {
+  const date = toDate(value)
+  if (!date) return ''
+  const sameDay = (a, b) => a.toDateString() === b.toDateString()
+  const now = new Date()
+  if (sameDay(date, now)) return 'Today'
+  if (sameDay(date, new Date(now.getTime() - 86400000))) return 'Yesterday'
+  return formatDate(value)
+}
+
 export function formatTimeAgo(value) {
   const date = toDate(value)
   if (!date) return ''

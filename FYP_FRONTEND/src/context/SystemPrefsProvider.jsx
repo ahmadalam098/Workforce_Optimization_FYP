@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { settingsApi } from '../services/adminService.js'
+import { settingsApi } from '../services/admin/adminService.js'
 import { setDisplayPrefs } from '../utils/format.js'
 import { SystemPrefsContext } from './systemPrefsContext.js'
 

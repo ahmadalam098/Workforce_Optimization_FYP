@@ -31,9 +31,9 @@ namespace fyp_project.Controllers.Admin
             _mailer = mailer;
         }
 
-        // GET api/admin/tickets?search=&status=Open|Resolved&organizationId=&page=1&pageSize=10
+        // GET api/admin/tickets?search=&status=Open|Resolved&organizationId=&forwarded=true&source=Employee|Organization&category=&page=1&pageSize=10
         [HttpGet]
-        public async Task<IActionResult> List(string? search, string? status, int? organizationId, int page = 1, int pageSize = 10)
+        public async Task<IActionResult> List(string? search, string? status, int? organizationId, bool? forwarded, string? source, string? category, int page = 1, int pageSize = 10)
         {
             (page, pageSize) = NormalizePaging(page, pageSize);
 
@@ -54,11 +54,17 @@ namespace fyp_project.Controllers.Admin
                 query = query.Where(t => t.Status == "Resolved" || t.Status == "Closed");
 
             if (organizationId.HasValue) query = query.Where(t => t.OrgId == organizationId.Value);
+            if (forwarded == true) query = query.Where(t => t.ForwardedAt != null);
+            // Employee = a query an employee asked; Organization = from an organization (also when its manager logged it for it).
+            if (string.Equals(source, "Employee", StringComparison.OrdinalIgnoreCase)) query = query.Where(t => t.Source == "Employee");
+            else if (string.Equals(source, "Organization", StringComparison.OrdinalIgnoreCase)) query = query.Where(t => t.Source != "Employee");
+            if (!string.IsNullOrWhiteSpace(category) && Categories.Contains(category)) query = query.Where(t => t.Category == category);
 
             var total = await query.CountAsync();
 
             var items = await query
                 .OrderBy(t => t.Status == "Resolved" || t.Status == "Closed" ? 1 : 0)
+                .ThenByDescending(t => t.ForwardedAt != null)
                 .ThenBy(t => t.Priority == "Critical" ? 0 : t.Priority == "High" ? 1 : t.Priority == "Medium" ? 2 : 3)
                 .ThenByDescending(t => t.CreatedAt)
                 .Skip((page - 1) * pageSize)
@@ -77,6 +83,9 @@ namespace fyp_project.Controllers.Admin
                     RaisedBy = _db.Users.Where(u => u.UserId == t.RaisedByUserId).Select(u => u.Name).FirstOrDefault(),
                     CreatedAt = t.CreatedAt,
                     ResolvedAt = t.ResolvedAt,
+                    ForwardedAt = t.ForwardedAt,
+                    ForwardedBy = _db.Users.Where(u => u.UserId == t.ForwardedBy).Select(u => u.Name).FirstOrDefault(),
+                    ForwardNote = t.ForwardNote,
                 })
                 .ToListAsync();
 
@@ -118,7 +127,7 @@ namespace fyp_project.Controllers.Admin
                 .ToListAsync();
 
             var userIds = messages.Where(m => m.AuthorUserId.HasValue).Select(m => m.AuthorUserId!.Value)
-                .Concat(new[] { ticket.RaisedByUserId }.Where(id => id.HasValue).Select(id => id!.Value))
+                .Concat(new[] { ticket.RaisedByUserId, ticket.ForwardedBy }.Where(id => id.HasValue).Select(id => id!.Value))
                 .Distinct().ToList();
             var names = await _db.Users.AsNoTracking().Where(u => userIds.Contains(u.UserId)).ToDictionaryAsync(u => u.UserId, u => u.Name);
 
@@ -139,6 +148,9 @@ namespace fyp_project.Controllers.Admin
                 RaisedBy = Name(ticket.RaisedByUserId),
                 CreatedAt = ticket.CreatedAt,
                 ResolvedAt = ticket.ResolvedAt,
+                ForwardedAt = ticket.ForwardedAt,
+                ForwardedBy = ticket.ForwardedBy.HasValue ? Name(ticket.ForwardedBy) : null,
+                ForwardNote = ticket.ForwardNote,
                 Messages = messages.Select(m => new TicketMessageDto
                 {
                     MessageId = m.MessageId, MessageType = m.MessageType, Body = m.Body,
@@ -156,8 +168,32 @@ namespace fyp_project.Controllers.Admin
             if (!Priorities.Contains(priority)) return FieldError("priority", "Priority must be Low, Medium, High or Critical.");
             if (!Categories.Contains(category)) return FieldError("category", "Unknown category.");
 
-            if (!await _db.Organizations.AnyAsync(o => o.OrgId == request.OrganizationId))
-                return FieldError("organizationId", "The selected organization does not exist.");
+            int? orgId = request.OrganizationId;
+            int? raisedBy = null;
+            var source = "Organization";
+            string? employeeName = null;
+
+            if (request.EmployeeId.HasValue)
+            {
+                var employee = await _db.Employees.AsNoTracking().Where(e => e.EmpId == request.EmployeeId.Value && e.User!.IsActive == true)
+                    .Select(e => new
+                    {
+                        e.UserId,
+                        e.User!.Name,
+                        OrgId = _db.EmployeeAllocations.Where(AllocationLogic.IsOpen).Where(a => a.EmployeeId == e.EmpId).Select(a => a.AssignOrgId).FirstOrDefault() ?? e.OrgId,
+                    })
+                    .FirstOrDefaultAsync();
+                if (employee == null) return FieldError("employeeId", "The selected employee does not exist or is inactive.");
+                // The query belongs to the organization the employee works for now (otherwise their home organization). A pool employee has none.
+                orgId = employee.OrgId;
+                raisedBy = employee.UserId;
+                employeeName = employee.Name;
+                source = "Employee";
+            }
+            else if (!await _db.Organizations.AnyAsync(o => o.OrgId == request.OrganizationId))
+            {
+                return FieldError("organizationId", "Select an organization that exists.");
+            }
 
             var ticket = new Ticket
             {
@@ -166,8 +202,9 @@ namespace fyp_project.Controllers.Admin
                 Category = category,
                 Priority = priority,
                 Status = Open,
-                Source = "Organization",
-                OrgId = request.OrganizationId,
+                Source = source,
+                OrgId = orgId,
+                RaisedByUserId = raisedBy,
                 CreatedBy = CurrentUserId,
                 CreatedAt = DateTime.UtcNow,
             };
@@ -178,7 +215,8 @@ namespace fyp_project.Controllers.Admin
             await _db.SaveChangesAsync();
 
             await _audit.LogAsync(CurrentUserId, "TICKET_CREATED", "Ticket", ticket.TicketId, $"{ticket.TicketNumber} [{priority}] {ticket.Subject}");
-            return Ok(new { message = $"Query {ticket.TicketNumber} added.", ticketId = ticket.TicketId, ticketNumber = ticket.TicketNumber });
+            var where = employeeName == null ? string.Empty : orgId.HasValue ? " It is for the manager of the organization the employee works for." : " The employee is not in an organization, so only you see it.";
+            return Ok(new { message = $"Query {ticket.TicketNumber} added" + (employeeName != null ? $" for {employeeName}." : ".") + where, ticketId = ticket.TicketId, ticketNumber = ticket.TicketNumber });
         }
 
         // POST api/admin/tickets/5/resolve   { comment }
@@ -213,7 +251,7 @@ namespace fyp_project.Controllers.Admin
             await _audit.LogAsync(CurrentUserId, "TICKET_RESOLVED", "Ticket", ticketId, $"{ticket.TicketNumber}: {comment}");
 
             var resolver = await _db.Users.AsNoTracking().Where(u => u.UserId == CurrentUserId).Select(u => u.Name).FirstOrDefaultAsync();
-            var emailNote = await _mailer.SendQueryResolvedAsync(CurrentUserId, ticket.TicketId, ticket.TicketNumber ?? $"#{ticket.TicketId}", ticket.Subject, ticket.OrgId, comment, resolver, now);
+            var emailNote = await _mailer.SendQueryResolvedAsync(CurrentUserId, ticket.TicketId, ticket.TicketNumber ?? $"#{ticket.TicketId}", ticket.Subject, ticket.OrgId, comment, resolver, now, ticket.Source == "Employee" ? ticket.RaisedByUserId : null);
 
             return Ok(new { message = "Query resolved." + emailNote, ticketId, status = Resolved });
         }

@@ -50,6 +50,7 @@ builder.Services.AddSingleton<RedisService>();
 
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<AccountMailer>();
+builder.Services.AddScoped<ChatService>();
 
 builder.Services.AddScoped<TokenService>();
 
@@ -207,6 +208,14 @@ builder.Services.AddAuthorization(options =>
             .RequireAssertion(context => context.User.Claims.Any(claim =>
                 (claim.Type == System.Security.Claims.ClaimTypes.Role || claim.Type == "role") &&
                 string.Equals(claim.Value, "Admin", StringComparison.OrdinalIgnoreCase))));
+
+    // Organization Manager portal APIs.
+    options.AddPolicy("ManagerOnly", policy =>
+        policy
+            .RequireAuthenticatedUser()
+            .RequireAssertion(context => context.User.Claims.Any(claim =>
+                (claim.Type == System.Security.Claims.ClaimTypes.Role || claim.Type == "role") &&
+                string.Equals(claim.Value, "Organization Manager", StringComparison.OrdinalIgnoreCase))));
 });
 
 

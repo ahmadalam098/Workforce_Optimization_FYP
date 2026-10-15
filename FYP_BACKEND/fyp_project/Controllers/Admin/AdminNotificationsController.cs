@@ -25,6 +25,9 @@ namespace fyp_project.Controllers.Admin
         public string Message { get; set; } = string.Empty;
         public string? EntityType { get; set; }
         public string? EntityId { get; set; }
+
+        /// <summary>A page to open, when the alert is not about an audited item (used by the manager bell).</summary>
+        public string? Link { get; set; }
     }
 
     public class NotificationFeedDto

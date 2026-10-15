@@ -1,0 +1,23 @@
+{
+  "name": "fyp-chat",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Real-time chat server (Node.js + Socket.IO) between organization managers and their organizations. Messages are saved through the ASP.NET API.",
+  "type": "module",
+  "scripts": {
+    "init-env": "node scripts/init-env.js",
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node test/chat.test.js"
+  },
+  "dependencies": {
+    "cookie": "^1.0.2",
+    "dotenv": "^16.4.7",
+    "jsonwebtoken": "^9.0.2",
+    "socket.io": "^4.8.1",
+    "undici": "^7.2.0"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.1"
+  }
+}

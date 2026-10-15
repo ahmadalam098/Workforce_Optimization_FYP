@@ -1,0 +1,36 @@
+// Sidebar of the Organization Manager portal. `ready: false` items are shown as "Soon" until their pages and APIs exist.
+export const MANAGER_NAV_SECTIONS = [
+  {
+    title: 'Overview',
+    items: [{ label: 'Dashboard', icon: 'dashboard', to: '/manager/dashboard', ready: true }],
+  },
+  {
+    title: 'My organizations',
+    items: [
+      { label: 'Employee Pool', icon: 'users', to: '/manager/employee-pool', ready: true },
+      { label: 'Salary Status', icon: 'chart', to: '/manager/salaries', ready: true },
+      { label: 'Performance Monitoring', icon: 'activity', to: '/manager/performance', ready: true },
+      { label: 'My Organizations', icon: 'building', to: '/manager/organizations', ready: true },
+      { label: 'Staff Requests', icon: 'inbox', to: '/manager/requests', ready: true },
+    ],
+  },
+  {
+    title: 'Communication',
+    items: [{ label: 'Chat', icon: 'send', to: '/manager/chat', ready: true }],
+  },
+  {
+    title: 'Finance',
+    items: [
+      { label: 'Invoices', icon: 'file', to: '/manager/invoices', ready: true },
+      { label: 'Payments', icon: 'chart', to: '/manager/payments', ready: true },
+    ],
+  },
+  {
+    title: 'Support',
+    items: [{ label: 'Queries & Complaints', icon: 'inbox', to: '/manager/queries', ready: true }],
+  },
+  {
+    title: 'Account',
+    items: [{ label: 'Settings', icon: 'settings', to: '/manager/settings', ready: true }],
+  },
+]

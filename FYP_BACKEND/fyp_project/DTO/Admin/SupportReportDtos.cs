@@ -21,6 +21,11 @@ namespace fyp_project.DTOs.Admin
         public string? RaisedBy { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? ResolvedAt { get; set; }
+
+        /// <summary>When the organization manager sent this to the admin, who did, and their note.</summary>
+        public DateTime? ForwardedAt { get; set; }
+        public string? ForwardedBy { get; set; }
+        public string? ForwardNote { get; set; }
     }
 
     public class TicketMessageDto
@@ -38,11 +43,16 @@ namespace fyp_project.DTOs.Admin
         public List<TicketMessageDto> Messages { get; set; } = new();
     }
 
-    /// <summary>Logs a query for an organization (used for testing until the organization side sends its own).</summary>
+    /// <summary>
+    /// Logs a query for an organization, or for an employee (used for testing until the organization and employee sides send their own).
+    /// With <see cref="EmployeeId"/> it is an employee's query and the organization is worked out from where the employee works.
+    /// </summary>
     public class CreateTicketRequest
     {
-        [Range(1, int.MaxValue, ErrorMessage = "Select an organization.")]
         public int OrganizationId { get; set; }
+
+        /// <summary>Set to log a query that an employee asked.</summary>
+        public int? EmployeeId { get; set; }
 
         [Required, StringLength(150), MinTrimmedLength(5)] public string Subject { get; set; } = string.Empty;
         [Required, StringLength(2000), MinTrimmedLength(10)] public string Description { get; set; } = string.Empty;
