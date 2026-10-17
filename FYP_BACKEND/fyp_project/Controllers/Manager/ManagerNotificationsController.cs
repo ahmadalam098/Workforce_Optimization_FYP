@@ -52,6 +52,13 @@ namespace fyp_project.Controllers.Manager
             ["TICKET_CREATED"] = "New query or complaint",
             ["TICKET_RESOLVED"] = "Query or complaint resolved",
             ["TICKET_FORWARDED"] = "Query sent to the admin",
+            ["OFFER_ACCEPTED"] = "An employee accepted an assignment",
+            ["OFFER_DECLINED"] = "An employee declined an assignment",
+            ["OFFER_FAILED"] = "An accepted assignment could not be made",
+            ["EMPLOYEE_REVIEW_SUBMITTED"] = "New review of an employee",
+            ["EMPLOYEE_REVIEW_DISMISSED"] = "Review handled",
+            ["REVIEW_ESCALATED"] = "Review sent to the admin",
+            ["REVIEW_ESCALATION_DECIDED"] = "The admin decided about a review",
             ["WORKFORCE_REQUEST_CREATED"] = "New staff request",
             ["WORKFORCE_REQUEST_APPROVED"] = "Staff request approved",
             ["WORKFORCE_REQUEST_REJECTED"] = "Staff request rejected",
@@ -77,6 +84,8 @@ namespace fyp_project.Controllers.Manager
                 .Where(a => (a.AssignOrgId != null && orgIds.Contains(a.AssignOrgId.Value)) || (a.OwnerOrgId != null && orgIds.Contains(a.OwnerOrgId.Value)))
                 .Select(a => a.AllocationId).ToListAsync()).Select(i => i.ToString()).ToList();
             var invoiceKeys = (await _db.Invoices.AsNoTracking().Where(i => orgIds.Contains(i.OrgId)).Select(i => i.InvoiceId).ToListAsync()).Select(i => i.ToString()).ToList();
+            var reviewKeys = (await _db.OrganizationReviews.AsNoTracking().Where(r => r.OrgId != null && orgIds.Contains(r.OrgId.Value)).Select(r => r.ReviewId).ToListAsync()).Select(i => i.ToString()).ToList();
+            var offerKeys = (await _db.AssignmentOffers.AsNoTracking().Where(o => orgIds.Contains(o.OrgId)).Select(o => o.OfferId).ToListAsync()).Select(i => i.ToString()).ToList();
             var ticketKeys = (await _db.Tickets.AsNoTracking().Where(t => t.OrgId != null && orgIds.Contains(t.OrgId.Value)).Select(t => t.TicketId).ToListAsync()).Select(i => i.ToString()).ToList();
 
             // The manager's own employees: working for one of the organizations now, or (when free) belonging to one.
@@ -91,15 +100,17 @@ namespace fyp_project.Controllers.Manager
 
             // Categories the manager switched off in Settings > Notifications.
             var hidden = new List<string>();
-            if (!pref.Requests) hidden.Add("WorkforceRequest");
+            if (!pref.Requests) hidden.AddRange(new[] { "WorkforceRequest", "AssignmentOffer" });
             if (!pref.Queries) hidden.Add("Ticket");
             if (!pref.Invoices) hidden.Add("Invoice");
-            if (!pref.Employees) hidden.AddRange(new[] { "Employee", "Allocation", "Payroll" });
+            if (!pref.Employees) hidden.AddRange(new[] { "Employee", "EmployeeReview", "Allocation", "Payroll" });
 
             return _db.AuditLogs.AsNoTracking().Where(a => a.ActorUserId != me && !hidden.Contains(a.EntityType!) && (
                 (a.EntityType == "Organization" && orgKeys.Contains(a.EntityId!) && !a.Action.StartsWith("ORGANIZATION_EMAIL")) ||
                 (a.EntityType == "Contract" && contractKeys.Contains(a.EntityId!)) ||
                 (a.EntityType == "WorkforceRequest" && requestKeys.Contains(a.EntityId!)) ||
+                (a.EntityType == "EmployeeReview" && reviewKeys.Contains(a.EntityId!)) ||
+                (a.EntityType == "AssignmentOffer" && offerKeys.Contains(a.EntityId!) && a.Action != "OFFER_SENT_TO_EMPLOYEE") ||
                 (a.EntityType == "Allocation" && allocationKeys.Contains(a.EntityId!)) ||
                 (a.EntityType == "Invoice" && invoiceKeys.Contains(a.EntityId!) && InvoiceActions.Contains(a.Action)) ||
                 (a.EntityType == "Ticket" && ticketKeys.Contains(a.EntityId!) && TicketActions.Contains(a.Action)) ||
@@ -125,6 +136,7 @@ namespace fyp_project.Controllers.Manager
                     if (latest.Length > 90) latest = latest[..90] + "...";
                     alerts.Add(new NotificationAlertDto
                     {
+                        Key = $"chat-{group.Key}-{group.First().MessageId}",
                         Title = $"{orgNames.GetValueOrDefault(group.Key) ?? "An organization"}: {group.Count()} new message{(group.Count() == 1 ? string.Empty : "s")}",
                         Message = latest,
                         Link = "/manager/chat",
@@ -150,6 +162,7 @@ namespace fyp_project.Controllers.Manager
                     var left = end.Value.DayNumber - today.DayNumber;
                     alerts.Add(new NotificationAlertDto
                     {
+                        Key = $"expiry-{contract.ContractId}-{end:yyyyMMdd}",
                         Title = $"Contract {contract.ContractNumber} ending soon",
                         Message = $"{contract.OrgName}: ends {end:yyyy-MM-dd} ({(left == 0 ? "today" : left == 1 ? "tomorrow" : $"in {left} days")}).",
                         Link = $"/manager/organizations/{contract.OrgId}",

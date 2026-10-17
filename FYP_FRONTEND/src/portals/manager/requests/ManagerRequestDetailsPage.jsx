@@ -14,6 +14,7 @@ import { PriorityBadge } from '../../admin/queries/TicketBadges.jsx'
 import Notice from '../../admin/shared/Notice.jsx'
 import { EmptyState, ErrorState } from '../../admin/shared/StateBox.jsx'
 import WorkflowBadge from '../../admin/shared/WorkflowBadge.jsx'
+import DecisionModal from '../../admin/shared/DecisionModal.jsx'
 import ManagerAllocationModal from '../allocations/ManagerAllocationModal.jsx'
 import RequestStaffPicker from './RequestStaffPicker.jsx'
 
@@ -31,6 +32,7 @@ function ManagerRequestDetailsPage() {
   const { requestId } = useParams()
   const [notice, setNotice] = useFlashNotice()
   const [removing, setRemoving] = useState(null)
+  const [deciding, setDeciding] = useState(null) // 'approve' | 'reject'
   const { data: request, error, loading, reload } = useFetch((signal) => managerRequestsApi.get(requestId, signal), `manager-request-${requestId}`)
 
   const back = (
@@ -71,9 +73,19 @@ function ManagerRequestDetailsPage() {
             <PriorityBadge priority={request.priority} />
           </div>
         </div>
+        {request.canDecide && (
+          <div className="hero-card__actions">
+            <Button onClick={() => setDeciding('approve')}>
+              <Icon name="checkCircle" size={17} /> Approve
+            </Button>
+            <Button variant="secondary" onClick={() => setDeciding('reject')}>
+              <Icon name="close" size={17} /> Reject
+            </Button>
+          </div>
+        )}
       </section>
 
-      {request.status === 'Pending' && <Alert type="info">This request is waiting for the admin. You do not have to wait: allocating an employee to it below approves it.</Alert>}
+      {request.status === 'Pending' && <Alert type="info">This request is waiting for your decision. Approve or reject it; allocating an employee to it below also approves it.</Alert>}
       {request.warnings.map((warning) => (
         <Alert type="warning" key={warning}>
           {warning}
@@ -121,7 +133,7 @@ function ManagerRequestDetailsPage() {
           </div>
           {request.reviews.length === 0 ? (
             <div className="card__body">
-              <EmptyState icon="clock" title="No decision yet" text="The admin has not decided on this request." />
+              <EmptyState icon="clock" title="No decision yet" text="Nobody has decided on this request yet." />
             </div>
           ) : (
             <ul className="card__body" style={{ margin: 0, paddingLeft: '1.2rem' }}>
@@ -199,6 +211,39 @@ function ManagerRequestDetailsPage() {
         </section>
       )}
       {!request.canStaff && request.status === 'Approved' && open.length >= request.requiredEmployees && <Alert type="success">This request is fully staffed.</Alert>}
+
+      {deciding === 'approve' && (
+        <DecisionModal
+          title="Approve this request?"
+          description="The organization is told. After this you choose the employees for it from the free pool."
+          label="Note for the organization (optional)"
+          confirmLabel="Approve"
+          onSubmit={async (note) => {
+            const result = await managerRequestsApi.approve(request.requestId, note || undefined)
+            setDeciding(null)
+            setNotice(result?.message || 'Approved.')
+            reload()
+          }}
+          onClose={() => setDeciding(null)}
+        />
+      )}
+      {deciding === 'reject' && (
+        <DecisionModal
+          title="Reject this request?"
+          description="The organization sees your reason."
+          label="Why is it rejected?"
+          required
+          danger
+          confirmLabel="Reject"
+          onSubmit={async (note) => {
+            const result = await managerRequestsApi.reject(request.requestId, note)
+            setDeciding(null)
+            setNotice(result?.message || 'Rejected.')
+            reload()
+          }}
+          onClose={() => setDeciding(null)}
+        />
+      )}
 
       {removing && (
         <ManagerAllocationModal

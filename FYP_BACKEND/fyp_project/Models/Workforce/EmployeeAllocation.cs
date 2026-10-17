@@ -27,6 +27,10 @@ public partial class EmployeeAllocation
 
     public DateTime? CreatedAt { get; set; }
 
+    /// <summary>Set when the system appointed this employee as the daily minimum of a daily contract (migration 015). It ends with the day's window.</summary>
+    [System.ComponentModel.DataAnnotations.Schema.Column("daily_contract_id")]
+    public int? DailyContractId { get; set; }
+
     public virtual ICollection<AllocationHistory> AllocationHistories { get; set; } = new List<AllocationHistory>();
 
     public virtual Organization? AssignOrg { get; set; }

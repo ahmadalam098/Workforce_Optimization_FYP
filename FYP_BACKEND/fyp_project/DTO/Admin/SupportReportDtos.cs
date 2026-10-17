@@ -43,16 +43,10 @@ namespace fyp_project.DTOs.Admin
         public List<TicketMessageDto> Messages { get; set; } = new();
     }
 
-    /// <summary>
-    /// Logs a query for an organization, or for an employee (used for testing until the organization and employee sides send their own).
-    /// With <see cref="EmployeeId"/> it is an employee's query and the organization is worked out from where the employee works.
-    /// </summary>
+    /// <summary>Logs a query for an organization (employees send their own queries from the Employee portal).</summary>
     public class CreateTicketRequest
     {
         public int OrganizationId { get; set; }
-
-        /// <summary>Set to log a query that an employee asked.</summary>
-        public int? EmployeeId { get; set; }
 
         [Required, StringLength(150), MinTrimmedLength(5)] public string Subject { get; set; } = string.Empty;
         [Required, StringLength(2000), MinTrimmedLength(10)] public string Description { get; set; } = string.Empty;

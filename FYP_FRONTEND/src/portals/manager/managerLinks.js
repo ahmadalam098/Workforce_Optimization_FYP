@@ -12,6 +12,8 @@ const LIST_PAGES = {
   Allocation: '/manager/employee-pool',
   Contract: '/manager/organizations',
   Payroll: '/manager/salaries',
+  AssignmentOffer: '/manager/offers',
+  EmployeeReview: '/manager/reviews',
 }
 
 /** The manager page to open for an audited item, or null when there is none. */

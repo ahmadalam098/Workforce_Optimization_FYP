@@ -60,6 +60,39 @@ namespace fyp_project.Services
                 .ToList();
         }
 
+        /// <summary>The managers of the organization, each with the latest message and how many of the manager's messages are unread. Only the managers linked to this organization.</summary>
+        public async Task<List<object>> ConversationsOfOrganizationAsync(int orgId)
+        {
+            var managers = await _db.OrganizationManagers.AsNoTracking()
+                .Where(m => m.OrgId == orgId && m.User != null && m.User.IsActive == true)
+                .Select(m => new { UserId = m.UserId!.Value, m.User!.Name })
+                .Distinct()
+                .ToListAsync();
+            var ids = managers.Select(m => m.UserId).ToList();
+
+            var unread = (await _db.ChatMessages.AsNoTracking()
+                .Where(m => m.OrgId == orgId && ids.Contains(m.ManagerUserId) && m.SenderType == ChatMessage.FromManager && m.ReadAt == null)
+                .GroupBy(m => m.ManagerUserId).Select(g => new { Id = g.Key, Count = g.Count() }).ToListAsync())
+                .ToDictionary(x => x.Id, x => x.Count);
+            var lastIds = await _db.ChatMessages.AsNoTracking()
+                .Where(m => m.OrgId == orgId && ids.Contains(m.ManagerUserId))
+                .GroupBy(m => m.ManagerUserId).Select(g => g.Max(m => m.MessageId)).ToListAsync();
+            var last = (await _db.ChatMessages.AsNoTracking().Where(m => lastIds.Contains(m.MessageId)).ToListAsync()).ToDictionary(m => m.ManagerUserId);
+
+            return managers
+                .Select(m => new
+                {
+                    managerUserId = m.UserId,
+                    name = m.Name,
+                    unread = unread.GetValueOrDefault(m.UserId),
+                    lastMessage = last.TryGetValue(m.UserId, out var l) ? ToDto(l) : null,
+                })
+                .OrderByDescending(c => c.lastMessage?.CreatedAt ?? DateTime.MinValue)
+                .ThenBy(c => c.name)
+                .Cast<object>()
+                .ToList();
+        }
+
         /// <summary>A page of the conversation, oldest first. <paramref name="beforeId"/> loads the messages older than that one.</summary>
         public async Task<List<ChatMessageDto>> MessagesAsync(int managerUserId, int orgId, long? beforeId, int limit)
         {

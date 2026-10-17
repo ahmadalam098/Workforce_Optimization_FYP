@@ -51,6 +51,8 @@ builder.Services.AddSingleton<RedisService>();
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<AccountMailer>();
 builder.Services.AddScoped<ChatService>();
+builder.Services.AddScoped<CallService>();
+builder.Services.AddScoped<AssignmentOfferService>();
 
 builder.Services.AddScoped<TokenService>();
 
@@ -64,6 +66,10 @@ builder.Services.AddScoped<EmployeeStatusService>();
 builder.Services.AddScoped<AllocationService>();
 builder.Services.AddScoped<ExchangeRateService>();
 builder.Services.AddScoped<PaymentRuleService>();
+builder.Services.AddScoped<SalaryReportService>();
+builder.Services.AddScoped<DailyStaffingService>();
+builder.Services.AddScoped<ContractModificationService>();
+builder.Services.AddHostedService<DailyStaffingWorker>();
 builder.Services.AddScoped<InvoiceService>();
 builder.Services.AddScoped<ReportService>();
 
@@ -216,6 +222,40 @@ builder.Services.AddAuthorization(options =>
             .RequireAssertion(context => context.User.Claims.Any(claim =>
                 (claim.Type == System.Security.Claims.ClaimTypes.Role || claim.Type == "role") &&
                 string.Equals(claim.Value, "Organization Manager", StringComparison.OrdinalIgnoreCase))));
+
+    // Organization portal APIs (an organization signs in on its own, apart from the staff accounts).
+    options.AddPolicy("OrganizationOnly", policy =>
+        policy
+            .RequireAuthenticatedUser()
+            .RequireAssertion(context => context.User.Claims.Any(claim =>
+                (claim.Type == System.Security.Claims.ClaimTypes.Role || claim.Type == "role") &&
+                string.Equals(claim.Value, "Organization", StringComparison.OrdinalIgnoreCase))));
+
+    // Business Owner portal APIs.
+    options.AddPolicy("BusinessOwnerOnly", policy =>
+        policy
+            .RequireAuthenticatedUser()
+            .RequireAssertion(context => context.User.Claims.Any(claim =>
+                (claim.Type == System.Security.Claims.ClaimTypes.Role || claim.Type == "role") &&
+                string.Equals(claim.Value, "Business Owner", StringComparison.OrdinalIgnoreCase))));
+
+    // Audio / video calls: an employee, an organization manager or an organization.
+    options.AddPolicy("CallParticipant", policy =>
+        policy
+            .RequireAuthenticatedUser()
+            .RequireAssertion(context => context.User.Claims.Any(claim =>
+                (claim.Type == System.Security.Claims.ClaimTypes.Role || claim.Type == "role") &&
+                (string.Equals(claim.Value, "Employee", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(claim.Value, "Organization Manager", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(claim.Value, "Organization", StringComparison.OrdinalIgnoreCase)))));
+
+    // Employee portal APIs.
+    options.AddPolicy("EmployeeOnly", policy =>
+        policy
+            .RequireAuthenticatedUser()
+            .RequireAssertion(context => context.User.Claims.Any(claim =>
+                (claim.Type == System.Security.Claims.ClaimTypes.Role || claim.Type == "role") &&
+                string.Equals(claim.Value, "Employee", StringComparison.OrdinalIgnoreCase))));
 });
 
 

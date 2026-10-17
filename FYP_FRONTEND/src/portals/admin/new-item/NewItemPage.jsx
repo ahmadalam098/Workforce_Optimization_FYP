@@ -4,7 +4,6 @@ import { PageModeContext } from '../../../components/ui/pageMode.js'
 import Spinner from '../../../components/ui/Spinner.jsx'
 import { useFetch } from '../../../hooks/useFetch.js'
 import { organizationsApi, skillsApi } from '../../../services/admin/adminService.js'
-import ContractFormModal from '../contracts/ContractFormModal.jsx'
 import EmployeeFormModal from '../employees/EmployeeFormModal.jsx'
 import InvoiceCreateModal from '../finance/InvoiceCreateModal.jsx'
 import OrganizationFormModal from '../organizations/OrganizationFormModal.jsx'
@@ -70,22 +69,6 @@ function OrganizationFlow() {
   return (
     <Shell backTo="/admin/organizations" backLabel="Organizations">
       {(close, saved) => <OrganizationFormModal onClose={close} onSaved={(message) => saved(message)} />}
-    </Shell>
-  )
-}
-
-function ContractFlow() {
-  const [params] = useSearchParams()
-  const organizationId = params.get('organizationId')
-  const { data, error } = useOrganizations()
-  const approved = (data ?? []).filter((org) => org.status === 'Active' || org.status === 'Approved')
-  // Coming from an organization's page goes back to that organization.
-  const backTo = organizationId ? `/admin/organizations/${organizationId}` : '/admin/contracts'
-  return (
-    <Shell backTo={backTo} backLabel={organizationId ? 'organization' : 'Contracts'} loading={!data} error={error}>
-      {(close, saved) => (
-        <ContractFormModal organizations={approved} defaultOrganizationId={organizationId ? Number(organizationId) : undefined} onClose={close} onSaved={(message) => saved(message)} />
-      )}
     </Shell>
   )
 }
@@ -190,7 +173,6 @@ function ContractRuleFlow() {
 const FLOWS = {
   employee: EmployeeFlow,
   organization: OrganizationFlow,
-  contract: ContractFlow,
   team: TeamFlow,
   skill: SkillFlow,
   shift: ShiftFlow,

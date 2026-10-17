@@ -8,7 +8,7 @@ import Spinner from '../../../components/ui/Spinner.jsx'
 import TextField from '../../../components/ui/TextField.jsx'
 import { useDebouncedValue } from '../../../hooks/useDebouncedValue.js'
 import { useFetch } from '../../../hooks/useFetch.js'
-import { managerRequestsApi } from '../../../services/manager/managerService.js'
+import { managerOffersApi, managerRequestsApi } from '../../../services/manager/managerService.js'
 import { EmptyState, ErrorState } from '../../admin/shared/StateBox.jsx'
 import { AvailabilityBadge } from '../../admin/shared/StatusBadge.jsx'
 
@@ -22,6 +22,23 @@ function RequestStaffPicker({ request, onStaffed }) {
 
   const debouncedSearch = useDebouncedValue(search)
   const { data: candidates, error, loading, reload } = useFetch((signal) => managerRequestsApi.candidates(request.requestId, debouncedSearch.trim(), signal), `candidates-${request.requestId}-${debouncedSearch.trim()}`)
+
+  async function sendOffers() {
+    setSubmitting(true)
+    setProblem('')
+    setResults(null)
+    try {
+      const result = await managerOffersApi.forRequest(request.requestId, selected)
+      setSelected([])
+      setResults(result)
+      onStaffed(result.message)
+      reload()
+    } catch (error_) {
+      setProblem(error_.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   const toggle = (employeeId) =>
     setSelected((current) => (current.includes(employeeId) ? current.filter((id) => id !== employeeId) : current.length >= request.stillNeeded ? current : [...current, employeeId]))
@@ -118,9 +135,17 @@ function RequestStaffPicker({ request, onStaffed }) {
           </div>
         )}
         <div>
-          <Button onClick={assign} loading={submitting} disabled={selected.length === 0}>
-            Allocate {selected.length > 0 ? `${selected.length} selected` : 'selected'}
-          </Button>
+          <div className="row-actions">
+            <Button onClick={sendOffers} loading={submitting} disabled={selected.length === 0 || request.willApprove} title={request.willApprove ? 'Approve the request first' : undefined}>
+              Send to {selected.length > 0 ? `${selected.length} selected` : 'selected'} employee{selected.length === 1 ? '' : 's'}
+            </Button>
+            <Button variant="secondary" onClick={assign} loading={submitting} disabled={selected.length === 0}>
+              Assign directly
+            </Button>
+          </div>
+          <p className="cell-muted">
+            <strong>Send</strong> asks the employee, who accepts or declines in their portal; only then are they allocated. <strong>Assign directly</strong> skips the employee&apos;s answer.
+          </p>
         </div>
     </div>
   )

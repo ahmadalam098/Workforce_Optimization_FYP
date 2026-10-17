@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import Alert from '../../../components/ui/Alert.jsx'
 import Button from '../../../components/ui/Button.jsx'
 import Icon from '../../../components/ui/Icon.jsx'
@@ -10,13 +10,14 @@ import TextField from '../../../components/ui/TextField.jsx'
 import { CONTRACT_STATUS_OPTIONS } from '../../../constants/contracts.js'
 import { useDebouncedValue } from '../../../hooks/useDebouncedValue.js'
 import { useFetch } from '../../../hooks/useFetch.js'
-import { contractsApi, organizationsApi } from '../../../services/admin/adminService.js'
+import { contractsApi, dailyStaffingApi, organizationsApi } from '../../../services/admin/adminService.js'
 import { formatMoney } from '../../../utils/format.js'
 import { formatPeriod, formatStaffRange } from '../../../utils/contractFormat.js'
 import ContractFormModal from './ContractFormModal.jsx'
 import Notice from '../shared/Notice.jsx'
 import PageHeader from '../shared/PageHeader.jsx'
 import { EmptyState, ErrorState } from '../shared/StateBox.jsx'
+import Badge from '../../../components/ui/Badge.jsx'
 import WorkflowBadge from '../shared/WorkflowBadge.jsx'
 import { useFlashNotice } from '../../../hooks/useFlashNotice.js'
 import ViewButton from '../shared/ViewButton.jsx'
@@ -27,7 +28,6 @@ const PAGE_SIZE = 10
 const canEdit = (status) => ['Pending', 'Active', 'Approved', 'Suspended'].includes(status)
 
 function ContractsPage() {
-  const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [organizationId, setOrganizationId] = useState('')
@@ -36,6 +36,7 @@ function ContractsPage() {
   const [editTarget, setEditTarget] = useState(null) // the full contract being edited
   const [loadingEditId, setLoadingEditId] = useState(null)
   const [editError, setEditError] = useState('')
+  const [appointing, setAppointing] = useState(false)
 
   const debouncedSearch = useDebouncedValue(search)
   const params = { search: debouncedSearch.trim(), status, organizationId, page, pageSize: PAGE_SIZE }
@@ -68,6 +69,19 @@ function ContractsPage() {
     }
   }
 
+  async function appointDailyMinimums() {
+    setAppointing(true)
+    setEditError('')
+    try {
+      const result = await dailyStaffingApi.runAll()
+      setNotice(result?.message || 'Done.')
+    } catch (error) {
+      setEditError(error.message)
+    } finally {
+      setAppointing(false)
+    }
+  }
+
   const items = data?.items ?? []
   const filtered = Boolean(debouncedSearch) || Boolean(status) || Boolean(organizationId)
 
@@ -75,11 +89,13 @@ function ContractsPage() {
     <div className="page">
       <PageHeader
         title="Contracts"
-        description="Agreements with client organizations: staffing, borrowing and payment terms."
+        description="Contracts that organizations asked for: review a request, set its hourly rates, then approve or reject it."
         actions={
-          <Button onClick={() => navigate('/admin/contracts/new')}>
-            <Icon name="plus" size={18} /> New contract
-          </Button>
+          <div className="row-actions">
+            <Button variant="secondary" onClick={appointDailyMinimums} loading={appointing} title="Appoint the missing minimum employees of every daily contract for today">
+              <Icon name="users" size={18} /> Appoint daily minimums
+            </Button>
+          </div>
         }
       />
 
@@ -111,14 +127,7 @@ function ContractsPage() {
           <EmptyState
             icon="file"
             title="No contracts found"
-            text={filtered ? 'Try changing or clearing the filters.' : 'Create the first contract for an approved organization.'}
-            action={
-              filtered ? null : (
-                <Button onClick={() => navigate('/admin/contracts/new')}>
-                  <Icon name="plus" size={18} /> New contract
-                </Button>
-              )
-            }
+            text={filtered ? 'Try changing or clearing the filters.' : 'When an approved organization asks for a contract, the request appears here for you to review.'}
           />
         ) : (
           <>
@@ -145,6 +154,11 @@ function ContractsPage() {
                       <td>
                         <span className="person__name">{contract.contractNumber || `#${contract.contractId}`}</span>
                         <span className="person__sub">Version {contract.versionNo}</span>
+                        {contract.hasPendingChange && (
+                          <Badge tone="warning" dot>
+                            Change requested
+                          </Badge>
+                        )}
                       </td>
                       <td>
                         {contract.organizationId ? (

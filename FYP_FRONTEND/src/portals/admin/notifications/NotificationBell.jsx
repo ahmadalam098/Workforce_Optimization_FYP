@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Icon from '../../../components/ui/Icon.jsx'
+import { useAuth } from '../../../context/useAuth.js'
 import { useNotificationFeed } from '../../../hooks/useNotificationFeed.js'
 import { formatDateTime, formatTimeAgo } from '../../../utils/format.js'
 import { actionTone, entityLink } from '../shared/auditLinks.js'
@@ -8,9 +9,31 @@ import './NotificationBell.css'
 
 const TONE_ICONS = { success: 'checkCircle', danger: 'alert', info: 'info' }
 
+// Alerts (unread chat messages, contracts ending, "your shift starts") are not audit entries, so the server cannot mark them as read.
+// "Mark all as read" remembers them in this browser instead: an alert counts again only when it changes (its key changes).
+const MAX_REMEMBERED = 100
+const alertKey = (alert) => alert.key ?? alert.title
+
+function readDismissed(storageKey) {
+  try {
+    const list = JSON.parse(localStorage.getItem(storageKey) ?? '[]')
+    return Array.isArray(list) ? list : []
+  } catch {
+    return []
+  }
+}
+
+function saveDismissed(storageKey, list) {
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(list))
+  } catch {
+    // Private window or blocked storage: the alerts simply count again after a reload.
+  }
+}
+
 function NotificationRow({ item, onOpen, linkFor }) {
   const tone = actionTone(item.action)
-  const link = linkFor(item.entityType, item.entityId)
+  const link = linkFor(item.entityType, item.entityId, item.action)
   const body = (
     <>
       <span className={`notif-item__icon notif-item__icon--${tone}`} aria-hidden="true">
@@ -38,10 +61,14 @@ function NotificationRow({ item, onOpen, linkFor }) {
 
 /**
  * The bell in the header: a count of what is new, and the latest activity (employees, organizations, managers ...).
- * The Admin portal uses the defaults; the Organization Manager portal passes its own api, link helper and (no) footer.
+ * The Admin portal uses the defaults; the other portals pass their own api, link helper and (no) footer. `extraAlerts(feed)` may return
+ * alerts that the portal works out itself from the feed ([{ title, message, link }]), for example with the browser's local time.
  */
-function NotificationBell({ api, linkFor = entityLink, footerTo = '/admin/audit-logs' }) {
+function NotificationBell({ api, linkFor = entityLink, footerTo = '/admin/audit-logs', extraAlerts }) {
   const { feed, error, markAllRead } = useNotificationFeed(api)
+  const { user } = useAuth()
+  const storageKey = `wfn-read-alerts-${user?.userId ?? 'anyone'}`
+  const [dismissed, setDismissed] = useState(() => readDismissed(storageKey))
   const [open, setOpen] = useState(false)
   const rootRef = useRef(null)
 
@@ -61,9 +88,20 @@ function NotificationBell({ api, linkFor = entityLink, footerTo = '/admin/audit-
     }
   }, [open])
 
-  const unread = feed?.unreadCount ?? 0
+  const extra = feed && extraAlerts ? extraAlerts(feed) : []
   const items = feed?.items ?? []
-  const alerts = feed?.alerts ?? []
+  const alerts = [...(feed?.alerts ?? []), ...extra]
+  // The server counts its own alerts in unreadCount; take them out and count only the alerts that have not been marked as read.
+  const unreadItems = Math.max(0, (feed?.unreadCount ?? 0) - (feed?.alerts?.length ?? 0))
+  const isLive = (alert) => !dismissed.includes(alertKey(alert))
+  const unread = unreadItems + alerts.filter(isLive).length
+
+  async function handleMarkAllRead() {
+    await markAllRead()
+    const next = [...new Set([...dismissed, ...alerts.map(alertKey)])].slice(-MAX_REMEMBERED)
+    setDismissed(next)
+    saveDismissed(storageKey, next)
+  }
 
   // Switched off in Settings > Notifications.
   if (feed && feed.enabled === false) return null
@@ -86,7 +124,7 @@ function NotificationBell({ api, linkFor = entityLink, footerTo = '/admin/audit-
         <div className="notif__panel" role="dialog" aria-label="Notifications">
           <div className="notif__header">
             <h3 className="notif__title">Notifications</h3>
-            <button type="button" className="notif__link-btn" onClick={markAllRead} disabled={unread - alerts.length === 0}>
+            <button type="button" className="notif__link-btn" onClick={handleMarkAllRead} disabled={unread === 0}>
               Mark all as read
             </button>
           </div>
@@ -105,12 +143,13 @@ function NotificationBell({ api, linkFor = entityLink, footerTo = '/admin/audit-
                   </span>
                 </>
               )
+              const state = isLive(alert) ? 'is-unread' : ''
               return link ? (
-                <Link key={alert.title} className="notif-item is-unread" to={link} onClick={() => setOpen(false)}>
+                <Link key={alertKey(alert)} className={`notif-item ${state}`} to={link} onClick={() => setOpen(false)}>
                   {content}
                 </Link>
               ) : (
-                <div key={alert.title} className="notif-item is-unread">{content}</div>
+                <div key={alertKey(alert)} className={`notif-item ${state}`}>{content}</div>
               )
             })}
             {error && !feed ? (

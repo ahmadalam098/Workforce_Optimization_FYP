@@ -168,32 +168,8 @@ namespace fyp_project.Controllers.Admin
             if (!Priorities.Contains(priority)) return FieldError("priority", "Priority must be Low, Medium, High or Critical.");
             if (!Categories.Contains(category)) return FieldError("category", "Unknown category.");
 
-            int? orgId = request.OrganizationId;
-            int? raisedBy = null;
-            var source = "Organization";
-            string? employeeName = null;
-
-            if (request.EmployeeId.HasValue)
-            {
-                var employee = await _db.Employees.AsNoTracking().Where(e => e.EmpId == request.EmployeeId.Value && e.User!.IsActive == true)
-                    .Select(e => new
-                    {
-                        e.UserId,
-                        e.User!.Name,
-                        OrgId = _db.EmployeeAllocations.Where(AllocationLogic.IsOpen).Where(a => a.EmployeeId == e.EmpId).Select(a => a.AssignOrgId).FirstOrDefault() ?? e.OrgId,
-                    })
-                    .FirstOrDefaultAsync();
-                if (employee == null) return FieldError("employeeId", "The selected employee does not exist or is inactive.");
-                // The query belongs to the organization the employee works for now (otherwise their home organization). A pool employee has none.
-                orgId = employee.OrgId;
-                raisedBy = employee.UserId;
-                employeeName = employee.Name;
-                source = "Employee";
-            }
-            else if (!await _db.Organizations.AnyAsync(o => o.OrgId == request.OrganizationId))
-            {
+            if (!await _db.Organizations.AnyAsync(o => o.OrgId == request.OrganizationId))
                 return FieldError("organizationId", "Select an organization that exists.");
-            }
 
             var ticket = new Ticket
             {
@@ -202,9 +178,8 @@ namespace fyp_project.Controllers.Admin
                 Category = category,
                 Priority = priority,
                 Status = Open,
-                Source = source,
-                OrgId = orgId,
-                RaisedByUserId = raisedBy,
+                Source = "Organization",
+                OrgId = request.OrganizationId,
                 CreatedBy = CurrentUserId,
                 CreatedAt = DateTime.UtcNow,
             };
@@ -215,8 +190,7 @@ namespace fyp_project.Controllers.Admin
             await _db.SaveChangesAsync();
 
             await _audit.LogAsync(CurrentUserId, "TICKET_CREATED", "Ticket", ticket.TicketId, $"{ticket.TicketNumber} [{priority}] {ticket.Subject}");
-            var where = employeeName == null ? string.Empty : orgId.HasValue ? " It is for the manager of the organization the employee works for." : " The employee is not in an organization, so only you see it.";
-            return Ok(new { message = $"Query {ticket.TicketNumber} added" + (employeeName != null ? $" for {employeeName}." : ".") + where, ticketId = ticket.TicketId, ticketNumber = ticket.TicketNumber });
+            return Ok(new { message = $"Query {ticket.TicketNumber} added.", ticketId = ticket.TicketId, ticketNumber = ticket.TicketNumber });
         }
 
         // POST api/admin/tickets/5/resolve   { comment }

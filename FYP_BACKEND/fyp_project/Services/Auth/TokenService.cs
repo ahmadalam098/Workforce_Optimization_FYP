@@ -102,4 +102,29 @@ public class TokenService
         return new JwtSecurityTokenHandler()
             .WriteToken(token);
     }
+
+    /// <summary>
+    /// The token of an organization (not a person). The NameIdentifier is "org-{id}", never a plain number, so nothing that reads a user id
+    /// can mistake an organization for a user; the organization id has its own claim.
+    /// </summary>
+    public string CreateOrganizationToken(int organizationId, string email)
+    {
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, $"org-{organizationId}"),
+            new Claim("org_id", organizationId.ToString()),
+            new Claim(ClaimTypes.Email, email),
+            new Claim(ClaimTypes.Role, "Organization"),
+        };
+
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
+        var token = new JwtSecurityToken(
+            issuer: _configuration["Jwt:Issuer"],
+            audience: _configuration["Jwt:Audience"],
+            claims: claims,
+            expires: DateTime.UtcNow.AddMinutes(ExpiryMinutes),
+            signingCredentials: new SigningCredentials(key, SecurityAlgorithms.HmacSha256));
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
 }

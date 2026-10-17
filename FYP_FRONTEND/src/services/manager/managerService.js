@@ -39,7 +39,7 @@ export const managerSalariesApi = {
 }
 
 export const managerRequestsApi = {
-  /** { waitingForAdmin, approvedShort, fullyStaffed, rejected } */
+  /** { waiting (waiting for the manager's decision), approvedShort, fullyStaffed, rejected } */
   summary: (signal) => apiRequest('/api/manager/requests/summary', { signal }),
   /** params: { search, status ('Pending' | 'Approved' | 'Rejected' | 'Cancelled' | 'Unstaffed'), priority, orgId, page, pageSize } */
   list: (params, signal) => apiRequest('/api/manager/requests', { params, signal }),
@@ -49,8 +49,48 @@ export const managerRequestsApi = {
   candidates: (requestId, search, signal) => apiRequest(`/api/manager/requests/${requestId}/candidates`, { params: { search }, signal }),
   /** Manual allocation to an approved request. -> { message, allocated, results: [{ employeeId, name, ok, message }] } */
   staff: (requestId, employeeIds) => apiRequest(`/api/manager/requests/${requestId}/staff`, { method: 'POST', body: { employeeIds } }),
-  /** body: { organizationId, requiredEmployees, skillId?, priority, startDatetime, endDatetime, reason } - the admin decides on it */
+  /** body: { organizationId, requiredEmployees, skillId?, priority, startDatetime, endDatetime, reason } - the manager decides, so it is approved at once */
   create: (body) => apiRequest('/api/manager/requests', { method: 'POST', body }),
+  /** The manager approves a request of the organization (it then waits for employees). */
+  approve: (requestId, note) => apiRequest(`/api/manager/requests/${requestId}/approve`, { method: 'POST', body: { note } }),
+  /** The reason is required: the organization sees it. */
+  reject: (requestId, note) => apiRequest(`/api/manager/requests/${requestId}/reject`, { method: 'POST', body: { note } }),
+}
+
+export const managerOffersApi = {
+  /** Forward an approved staff request to employees of the pool. They accept or decline. -> { message, sent, results: [{ employeeId, name, ok, message }] } */
+  forRequest: (requestId, employeeIds) => apiRequest(`/api/manager/offers/requests/${requestId}`, { method: 'POST', body: { employeeIds } }),
+  /** Forward the minimum staff of an active contract to employees of the pool. */
+  forMinimum: (contractId, employeeIds) => apiRequest(`/api/manager/offers/minimum/${contractId}`, { method: 'POST', body: { employeeIds } }),
+  /** status: 'Pending' | 'Accepted' | 'Declined' | 'Cancelled' | 'Expired' | 'Failed' (empty = all) -> [{ offerId, kind, requestId, contractId, orgName, employeeId, employeeName, status, note, createdAt, respondedAt }] */
+  list: (status, signal) => apiRequest('/api/manager/offers', { params: { status }, signal }),
+  cancel: (offerId) => apiRequest(`/api/manager/offers/${offerId}/cancel`, { method: 'POST' }),
+}
+
+export const managerReviewsApi = {
+  /** { total, badToHandle, warned, escalated, average } */
+  summary: (signal) => apiRequest('/api/manager/reviews/summary', { signal }),
+  /** params: { search, status ('New' | 'Warned' | 'Escalated' | 'Dismissed' | 'Resolved'), bad (true), orgId, page, pageSize } -> { items, total, page, pageSize } */
+  list: (params, signal) => apiRequest('/api/manager/reviews', { params, signal }),
+  get: (reviewId, signal) => apiRequest(`/api/manager/reviews/${reviewId}`, { signal }),
+  /** The employee is warned (notification + email). */
+  warn: (reviewId, message) => apiRequest(`/api/manager/reviews/${reviewId}/warn`, { method: 'POST', body: { message } }),
+  dismiss: (reviewId, note) => apiRequest(`/api/manager/reviews/${reviewId}/dismiss`, { method: 'POST', body: { note } }),
+  /** Asks the admin to act (warn / deactivate / nothing). */
+  escalate: (reviewId, message) => apiRequest(`/api/manager/reviews/${reviewId}/escalate`, { method: 'POST', body: { message } }),
+}
+
+export const managerMinimumStaffingApi = {
+  /**
+   * Every active contract of my organizations: [{ contractId, contractNumber, orgId, orgName, isDaily, window, min, max, appointed, missing, extraNow,
+   * borrowingAllowed, canStaff, hint, staff: [{ allocationId, employeeId, name, since, until }] }]
+   */
+  list: (signal) => apiRequest('/api/manager/minimum-staffing', { signal }),
+  /** The free employees (the contract's borrowing rule applied): [{ employeeId, fullName, availabilityStatus, rating, homeOrgName, isBorrowed, skills }] */
+  candidates: (contractId, search, signal) => apiRequest(`/api/manager/minimum-staffing/${contractId}/candidates`, { params: { search }, signal }),
+  /** -> { message, appointed, results: [{ employeeId, name, ok, message }] } */
+  staff: (contractId, employeeIds) => apiRequest(`/api/manager/minimum-staffing/${contractId}/staff`, { method: 'POST', body: { employeeIds } }),
+  release: (allocationId) => apiRequest(`/api/manager/minimum-staffing/release/${allocationId}`, { method: 'POST' }),
 }
 
 export const managerBillingApi = {
@@ -71,9 +111,7 @@ export const managerTicketsApi = {
   /** params: { search, category ('Query' | 'Complaint'), source ('Employee' | 'Organization'), status ('Open' | 'Resolved'), organizationId, forwarded, severe, page, pageSize } */
   list: (params, signal) => apiRequest('/api/manager/tickets', { params, signal }),
   get: (ticketId, signal) => apiRequest(`/api/manager/tickets/${ticketId}`, { signal }),
-  /** The employees a query can be logged for: [{ employeeId, fullName, orgId, orgName }] */
-  employees: (signal) => apiRequest('/api/manager/tickets/employees', { signal }),
-  /** body: { organizationId | employeeId, category ('Query' | 'Complaint'), subject, description, priority, sendToAdmin, note } */
+  /** body: { organizationId, category ('Query' | 'Complaint'), subject, description, priority, sendToAdmin, note } */
   create: (body) => apiRequest('/api/manager/tickets', { method: 'POST', body }),
   /** Sends it to the admin. note is optional; priority (Low | Medium | High | Critical) is the severity the manager judges it to have. */
   forward: (ticketId, note, priority) => apiRequest(`/api/manager/tickets/${ticketId}/forward`, { method: 'POST', body: { note, priority } }),

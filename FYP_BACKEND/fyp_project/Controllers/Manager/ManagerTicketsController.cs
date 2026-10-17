@@ -12,11 +12,8 @@ namespace fyp_project.Controllers.Manager
 {
     public class ManagerCreateTicketRequest
     {
-        /// <summary>The organization it is about. Not needed (and ignored) when <see cref="EmployeeId"/> is given.</summary>
+        /// <summary>The organization it is about (employees send their own queries from the Employee portal).</summary>
         public int OrganizationId { get; set; }
-
-        /// <summary>Set to log a query of an employee who works for one of the manager's organizations.</summary>
-        public int? EmployeeId { get; set; }
 
         /// <summary>Query or Complaint.</summary>
         [Required, StringLength(30)] public string Category { get; set; } = "Query";
@@ -102,32 +99,6 @@ namespace fyp_project.Controllers.Manager
         /// </summary>
         private IQueryable<Ticket> Mine(List<int> orgIds) =>
             _db.Tickets.AsNoTracking().Where(t => t.OrgId != null && orgIds.Contains(t.OrgId.Value) && (Categories.Contains(t.Category) || t.Source == EmployeeSource));
-
-        /// <summary>The organization an employee is in: where they work now (open allocation), otherwise their home organization.</summary>
-        private IQueryable<Employee> EmployeesOf(List<int> orgIds)
-        {
-            var open = _db.EmployeeAllocations.Where(AllocationLogic.IsOpen);
-            return _db.Employees.AsNoTracking().Where(e => e.User!.IsActive == true &&
-                (open.Any(a => a.EmployeeId == e.EmpId && a.AssignOrgId != null && orgIds.Contains(a.AssignOrgId.Value)) ||
-                 (e.OrgId != null && orgIds.Contains(e.OrgId.Value) && !open.Any(a => a.EmployeeId == e.EmpId))));
-        }
-
-        // GET api/manager/tickets/employees   (the employees a query can be logged for)
-        [HttpGet("employees")]
-        public async Task<IActionResult> Employees()
-        {
-            var orgIds = await MyOrganizationIdsAsync();
-            var rows = await EmployeesOf(orgIds).OrderBy(e => e.User!.Name)
-                .Select(e => new
-                {
-                    employeeId = e.EmpId,
-                    fullName = e.User!.Name,
-                    orgId = _db.EmployeeAllocations.Where(AllocationLogic.IsOpen).Where(a => a.EmployeeId == e.EmpId).Select(a => a.AssignOrgId).FirstOrDefault() ?? e.OrgId,
-                })
-                .ToListAsync();
-            var names = await _db.Organizations.AsNoTracking().Where(o => orgIds.Contains(o.OrgId)).ToDictionaryAsync(o => o.OrgId, o => o.OrgName);
-            return Ok(rows.Select(r => new { r.employeeId, r.fullName, r.orgId, orgName = r.orgId.HasValue ? names.GetValueOrDefault(r.orgId.Value) : null }));
-        }
 
         // GET api/manager/tickets/summary
         [HttpGet("summary")]
@@ -327,7 +298,7 @@ namespace fyp_project.Controllers.Manager
             return Ok(new { message = "Query resolved." + emailNote, ticketId, status = AdminTicketsController.Resolved });
         }
 
-        // POST api/manager/tickets   (log a query or complaint of one of my organizations, or of one of my employees)
+        // POST api/manager/tickets   (log a query or complaint of one of my organizations)
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] ManagerCreateTicketRequest request)
         {
@@ -337,24 +308,8 @@ namespace fyp_project.Controllers.Manager
             if (PriorityProblem(request.Priority) is { } bad) return bad;
             var priority = string.IsNullOrWhiteSpace(request.Priority) ? "Medium" : request.Priority.Trim();
 
-            int orgId;
-            int? employeeUserId = null;
-            var source = "Manager";
-            if (request.EmployeeId.HasValue)
-            {
-                var employee = await EmployeesOf(orgIds).Where(e => e.EmpId == request.EmployeeId.Value)
-                    .Select(e => new { e.UserId, OrgId = _db.EmployeeAllocations.Where(AllocationLogic.IsOpen).Where(a => a.EmployeeId == e.EmpId).Select(a => a.AssignOrgId).FirstOrDefault() ?? e.OrgId })
-                    .FirstOrDefaultAsync();
-                if (employee?.OrgId == null) return StatusCode(403, new { message = "This employee does not work for one of your organizations." });
-                orgId = employee.OrgId.Value;
-                employeeUserId = employee.UserId;
-                source = EmployeeSource;
-            }
-            else
-            {
-                if (!orgIds.Contains(request.OrganizationId)) return StatusCode(403, new { message = "You can only log it for an organization you manage." });
-                orgId = request.OrganizationId;
-            }
+            if (!orgIds.Contains(request.OrganizationId)) return StatusCode(403, new { message = "You can only log it for an organization you manage." });
+            var orgId = request.OrganizationId;
 
             var ticket = new Ticket
             {
@@ -363,9 +318,9 @@ namespace fyp_project.Controllers.Manager
                 Category = category,
                 Priority = priority,
                 Status = AdminTicketsController.Open,
-                Source = source,
+                Source = "Manager",
                 OrgId = orgId,
-                RaisedByUserId = employeeUserId ?? CurrentUserId,
+                RaisedByUserId = CurrentUserId,
                 CreatedBy = CurrentUserId,
                 CreatedAt = DateTime.UtcNow,
             };
@@ -373,7 +328,7 @@ namespace fyp_project.Controllers.Manager
             await _db.SaveChangesAsync();
             ticket.TicketNumber = $"TCK-{ticket.TicketId:0000}";
             await _db.SaveChangesAsync();
-            await _audit.LogAsync(CurrentUserId, "TICKET_CREATED", "Ticket", ticket.TicketId, $"{ticket.TicketNumber} [{priority}] {category}{(employeeUserId != null ? " of an employee" : string.Empty)} logged by the organization manager: {ticket.Subject}");
+            await _audit.LogAsync(CurrentUserId, "TICKET_CREATED", "Ticket", ticket.TicketId, $"{ticket.TicketNumber} [{priority}] {category} logged by the organization manager: {ticket.Subject}");
 
             if (request.SendToAdmin) return await ForwardAsync(ticket, request.Note, null);
             return Ok(new { message = $"{ticket.TicketNumber} was added.", ticketId = ticket.TicketId });

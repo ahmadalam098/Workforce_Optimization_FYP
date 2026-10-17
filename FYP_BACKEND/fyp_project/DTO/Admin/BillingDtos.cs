@@ -171,11 +171,10 @@ namespace fyp_project.DTOs.Admin
         public int? StructureId { get; set; }
         public decimal? MonthlySalary { get; set; }
         public string? Currency { get; set; }
-        /// <summary>The fixed overtime rate, when one is set.</summary>
-        public decimal? OvertimeRate { get; set; }
-        /// <summary>The rate that is actually used: the fixed one, or salary / working hours x multiplier.</summary>
-        public decimal? EffectiveOvertimeRate { get; set; }
         public DateOnly? EffectiveFrom { get; set; }
+        /// <summary>Months of the chosen year that were paid / are still unpaid (months before the first salary do not count).</summary>
+        public int PaidMonths { get; set; }
+        public int PendingMonths { get; set; }
     }
 
     public class SalaryStructureDto
@@ -183,8 +182,6 @@ namespace fyp_project.DTOs.Admin
         public int StructureId { get; set; }
         public decimal MonthlySalary { get; set; }
         public string Currency { get; set; } = string.Empty;
-        public decimal? OvertimeRate { get; set; }
-        public decimal EffectiveOvertimeRate { get; set; }
         public DateOnly EffectiveFrom { get; set; }
         public DateOnly? EffectiveTo { get; set; }
         public string? Notes { get; set; }
@@ -196,7 +193,6 @@ namespace fyp_project.DTOs.Admin
     {
         [Range(0, 1000000000)] public decimal MonthlySalary { get; set; }
         [Required, StringLength(10, MinimumLength = 3), RegularExpression(@"^[A-Za-z]{3}$", ErrorMessage = "Currency must be a 3-letter code such as PKR.")] public string Currency { get; set; } = "PKR";
-        [Range(0, 1000000)] public decimal? OvertimeRate { get; set; }
         public DateOnly? EffectiveFrom { get; set; }
         [StringLength(255)] public string? Notes { get; set; }
     }

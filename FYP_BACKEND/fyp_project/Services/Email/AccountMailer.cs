@@ -11,6 +11,7 @@ namespace fyp_project.Services
         Updated,
         PasswordReset,
         OrganizationsChanged,
+        Warned,
     }
 
     public enum OrganizationEvent
@@ -26,6 +27,8 @@ namespace fyp_project.Services
         StaffRequestApproved,
         StaffRequestRejected,
         StaffRequestCancelled,
+        ContractChangeApproved,
+        ContractChangeRejected,
     }
 
     /// <summary>
@@ -103,6 +106,8 @@ namespace fyp_project.Services
                     Layout(name, new[] { "Your <strong>WorkForce Nexus</strong> account has been <strong>activated</strong> again. You can sign in as usual." + Note(note) }, rows)),
                 PersonEvent.PasswordReset => ("Your WorkForce Nexus password was reset",
                     Layout(name, new[] { "Your <strong>WorkForce Nexus</strong> password was reset by our administrator, who will share the new password with you. You can also choose your own with <strong>Forgot password</strong> on the sign-in page.", "If you did not ask for this, please contact your administrator at once." }, rows)),
+                PersonEvent.Warned => ("You have received a warning on WorkForce Nexus",
+                    Layout(name, new[] { "You have received a <strong>warning</strong> about your work, because of feedback from an organization." + (string.IsNullOrWhiteSpace(note) ? string.Empty : $" <br/><strong>Message:</strong> {E(note)}"), "Please talk to your manager if you have questions." }, rows)),
                 PersonEvent.OrganizationsChanged => ("The organizations you manage have changed",
                     Layout(name, new[] { "The organizations you manage on <strong>WorkForce Nexus</strong> were updated by our administrator." }, rows)),
                 _ => ("Your WorkForce Nexus account was updated",
@@ -115,7 +120,7 @@ namespace fyp_project.Services
         {
             var org = $"<strong>{E(organization)}</strong>";
             var contract = string.IsNullOrWhiteSpace(item) ? "your contract" : $"contract <strong>{E(item)}</strong>";
-            var rows = new[] { ("Organization", organization), ("Contract", kind >= OrganizationEvent.ContractApproved && kind <= OrganizationEvent.ContractUpdated ? item ?? string.Empty : string.Empty) };
+            var rows = new[] { ("Organization", organization), ("Contract", (kind >= OrganizationEvent.ContractApproved && kind <= OrganizationEvent.ContractUpdated) || kind is OrganizationEvent.ContractChangeApproved or OrganizationEvent.ContractChangeRejected ? item ?? string.Empty : string.Empty) };
 
             (string subject, string text) = kind switch
             {
@@ -128,6 +133,8 @@ namespace fyp_project.Services
                 OrganizationEvent.ContractTerminated => ("Your contract has been terminated", $"{contract} for {org} has been <strong>terminated</strong>."),
                 OrganizationEvent.ContractUpdated => ("Your contract was updated", $"{contract} for {org} was updated by our administrator."),
                 OrganizationEvent.StaffRequestApproved => ("Your staff request was approved", $"Your request for staff for {org} has been <strong>approved</strong>. We will allocate employees shortly."),
+                OrganizationEvent.ContractChangeApproved => ("The change to your contract was approved", $"The change you asked for in {contract} for {org} has been <strong>approved</strong>. The new terms apply as described in your portal."),
+                OrganizationEvent.ContractChangeRejected => ("The change to your contract was not approved", $"The change you asked for in {contract} for {org} was <strong>not approved</strong>. Your current contract continues unchanged."),
                 OrganizationEvent.StaffRequestRejected => ("Your staff request was rejected", $"Your request for staff for {org} has been <strong>rejected</strong>."),
                 _ => ("Your staff request was cancelled", $"Your request for staff for {org} has been <strong>cancelled</strong>."),
             };
@@ -140,6 +147,17 @@ namespace fyp_project.Services
             ("The sign-in email of your WorkForce Nexus account was changed",
                 Layout(name, new[] { "The sign-in email of your <strong>WorkForce Nexus</strong> account was changed by our administrator. From now on you sign in with the new address, and emails are sent there.", "If you did not expect this, please contact your administrator at once." },
                     new[] { ("Previous email", oldEmail), ("New email", newEmail) }));
+
+        /// <summary>Sent to the managers of an organization when one of its employees sends a query or complaint.</summary>
+        public static (string Subject, string Html) NewEmployeeQueryMessage(string managerName, string ticketNumber, string category, string priority, string subject, string description, string employeeName, string organization) =>
+            ($"New {category.ToLowerInvariant()} from {employeeName}: {ticketNumber}",
+                Layout(managerName,
+                    new[]
+                    {
+                        $"<strong>{E(employeeName)}</strong> sent a new {E(category.ToLowerInvariant())} (<strong>{E(ticketNumber)}</strong>) on WorkForce Nexus. Please open <em>Queries &amp; Complaints</em> in your portal to answer it or send it to the admin.",
+                        $"<strong>{E(subject)}</strong><br/>{E(description).Replace("\n", "<br/>")}",
+                    },
+                    new[] { ("Ticket", ticketNumber), ("Type", category), ("Severity", priority), ("Employee", employeeName), ("Organization", organization) }));
 
         /// <summary>Sent to an organization (and its managers) when an admin resolves one of its queries.</summary>
         public static (string Subject, string Html) QueryResolvedMessage(string name, string ticketNumber, string subject, string comment, string? resolvedBy, DateTime resolvedAtUtc, string byRole = "administrator") =>
@@ -238,6 +256,27 @@ namespace fyp_project.Services
             if (employee == null) return " The employee has no email address, so no email was sent.";
             var (subjectLine, html) = QueryResolvedMessage(employee.Name ?? "there", ticketNumber, subject, comment, resolvedBy, resolvedAtUtc, "organization manager");
             return await SendAsync(actorUserId, "QUERY", "Ticket", ticketId, employee.Email!, subjectLine, html, "Resolved");
+        }
+
+        /// <summary>An employee sent a query or complaint: every active manager of the employee's organization is told by email.</summary>
+        public async Task<string> SendNewEmployeeQueryAsync(int? actorUserId, int ticketId, string ticketNumber, string category, string priority, string subject, string description, string employeeName, int organizationId)
+        {
+            var org = await _db.Organizations.AsNoTracking().Where(o => o.OrgId == organizationId).Select(o => o.OrgName).FirstOrDefaultAsync() ?? "your organization";
+            var managers = await _db.OrganizationManagers.AsNoTracking()
+                .Where(m => m.OrgId == organizationId && m.User != null && m.User.IsActive == true && m.User.Email != null)
+                .Select(m => new { m.User!.Name, m.User.Email })
+                .ToListAsync();
+            var distinct = managers.GroupBy(m => m.Email!, StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToList();
+            if (distinct.Count == 0) return string.Empty;
+
+            var failed = false;
+            foreach (var manager in distinct)
+            {
+                var (subjectLine, html) = NewEmployeeQueryMessage(manager.Name ?? "Manager", ticketNumber, category, priority, subject, description, employeeName, org);
+                var note = await SendAsync(actorUserId, "QUERY", "Ticket", ticketId, manager.Email!, subjectLine, html, "New");
+                if (note.Contains("could not be sent")) failed = true;
+            }
+            return failed ? " The email to the manager could not be sent." : string.Empty;
         }
 
         public async Task<string> SendQueryResolvedAsync(int? actorUserId, int ticketId, string ticketNumber, string subject, int? organizationId, string comment, string? resolvedBy, DateTime resolvedAtUtc, int? employeeUserId = null)

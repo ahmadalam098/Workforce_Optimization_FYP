@@ -75,11 +75,9 @@ namespace fyp_project.Services
             return value ?? fallback;
         }
 
-        /// <summary>The fixed overtime rate if there is one, otherwise (salary / working hours) x overtime multiplier.</summary>
+        /// <summary>The overtime rate per hour: (salary / working hours) x overtime multiplier, both from Payment Rules. There is no per-employee rate.</summary>
         public async Task<decimal> OvertimeRateAsync(SalaryStructure structure)
         {
-            if (structure.OvertimeRate.HasValue) return structure.OvertimeRate.Value;
-
             var hours = await GetAsync(WorkingHoursPerMonth, 208m);
             var multiplier = await GetAsync(OvertimeMultiplier, 1.5m);
             return hours <= 0 ? 0 : Money.Round(structure.MonthlySalary / hours * multiplier);

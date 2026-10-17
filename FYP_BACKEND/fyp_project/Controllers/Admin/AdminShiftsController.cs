@@ -183,10 +183,22 @@ namespace fyp_project.Controllers.Admin
             var shift = await _db.Shifts.AsNoTracking().FirstOrDefaultAsync(s => s.ShiftId == shiftId);
             if (shift == null) return NotFoundMessage("Shift not found.");
 
+            var before = DateTime.UtcNow.AddSeconds(-1);
             var (assigned, skipped) = await _shifts.AssignAsync(shiftId, request.EmployeeIds, CurrentUserId);
 
             if (assigned > 0)
+            {
                 await _audit.LogAsync(CurrentUserId, "SHIFT_ASSIGNED", "Shift", shiftId, $"{assigned} employee(s) -> {shift.ShiftName}");
+
+                // One entry for each employee too, so each of them is told in their own notification bell.
+                var ids = request.EmployeeIds.Distinct().ToList();
+                var changed = await _db.EmployeeShifts.AsNoTracking()
+                    .Where(s => ids.Contains(s.EmpId) && s.ShiftId == shiftId && s.CreatedAt >= before)
+                    .Select(s => new { s.EmpId, Name = s.Employee!.User!.Name })
+                    .ToListAsync();
+                foreach (var employee in changed.DistinctBy(c => c.EmpId))
+                    await _audit.LogAsync(CurrentUserId, "SHIFT_ASSIGNED", "Employee", employee.EmpId, $"{employee.Name} -> {shift.ShiftName}");
+            }
 
             var message = assigned == 0
                 ? "No changes: the selected employees are already on this shift or are inactive."
@@ -201,10 +213,21 @@ namespace fyp_project.Controllers.Admin
             var shift = await _db.Shifts.AsNoTracking().FirstOrDefaultAsync(s => s.ShiftId == shiftId);
             if (shift == null) return NotFoundMessage("Shift not found.");
 
+            // Who is on this shift now, before they are removed (to tell each of them).
+            var requested = request.EmployeeIds.Distinct().ToList();
+            var affected = await _db.EmployeeShifts.AsNoTracking()
+                .Where(s => requested.Contains(s.EmpId) && s.EndDate == null && s.ShiftId == shiftId)
+                .Select(s => new { s.EmpId, Name = s.Employee!.User!.Name })
+                .ToListAsync();
+
             var removed = await _shifts.UnassignAsync(request.EmployeeIds, shiftId);
 
             if (removed > 0)
+            {
                 await _audit.LogAsync(CurrentUserId, "SHIFT_UNASSIGNED", "Shift", shiftId, $"{removed} employee(s) removed from {shift.ShiftName}");
+                foreach (var employee in affected.DistinctBy(c => c.EmpId))
+                    await _audit.LogAsync(CurrentUserId, "SHIFT_UNASSIGNED", "Employee", employee.EmpId, $"{employee.Name} removed from {shift.ShiftName}");
+            }
 
             return Ok(new { message = $"{removed} employee(s) removed from {shift.ShiftName}.", removed });
         }

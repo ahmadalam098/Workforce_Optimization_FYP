@@ -28,7 +28,7 @@ function validateRequest(form) {
   })
 }
 
-/** Log a staff request for one of the manager's organizations (for example one more employee for a specific time). The admin decides on it. */
+/** Log a staff request for one of the manager's organizations (for example one more employee for a specific time). The manager decides, so it is approved at once. */
 export function NewRequestModal({ organizations, onClose, onDone }) {
   const { form, field, checkAll, addServerErrors } = useFormFields(
     {
@@ -78,7 +78,7 @@ export function NewRequestModal({ organizations, onClose, onDone }) {
   return (
     <Modal
       title="New staff request"
-      subtitle="For example one more employee for a specific time. The admin decides on it; once approved you can staff it from the employee pool."
+      subtitle="For example one more employee for a specific time. It is approved at once; then you can staff it from the employee pool."
       size="lg"
       onClose={onClose}
       busy={submitting}

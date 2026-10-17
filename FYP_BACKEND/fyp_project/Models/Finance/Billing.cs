@@ -45,7 +45,6 @@ public class SalaryStructure
     [Column("emp_id")] public int EmpId { get; set; }
     [Column("monthly_salary", TypeName = "decimal(12,2)")] public decimal MonthlySalary { get; set; }
     [Column("currency"), MaxLength(10)] public string Currency { get; set; } = "PKR";
-    [Column("overtime_rate", TypeName = "decimal(10,2)")] public decimal? OvertimeRate { get; set; }
     [Column("effective_from")] public DateOnly EffectiveFrom { get; set; }
     [Column("effective_to")] public DateOnly? EffectiveTo { get; set; }
     [Column("notes"), MaxLength(255)] public string? Notes { get; set; }

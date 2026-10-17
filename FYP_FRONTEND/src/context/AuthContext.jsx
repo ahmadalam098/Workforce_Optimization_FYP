@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AuthContext } from './authContext.js'
 import * as authService from '../services/authService.js'
+import * as organizationService from '../services/organization/organizationService.js'
 import { setUnauthorizedHandler } from '../services/apiClient.js'
 import { clearUser, loadUser, saveUser, updateStoredUser } from '../utils/userStorage.js'
 
@@ -15,6 +16,19 @@ export function AuthProvider({ children }) {
     const profile = response?.user
     if (!profile?.roleName) {
       throw new Error('Login response did not include user details. Please try again.')
+    }
+    saveUser(profile, remember)
+    setUser(profile)
+    setSessionMessage('')
+    return profile
+  }, [])
+
+  // An organization signs in with its own email and password (no role to choose); the session works the same way.
+  const loginOrganization = useCallback(async ({ email, password, remember }) => {
+    const response = await organizationService.login({ email, password })
+    const profile = response?.user
+    if (!profile?.roleName) {
+      throw new Error('Login response did not include the organization details. Please try again.')
     }
     saveUser(profile, remember)
     setUser(profile)
@@ -87,13 +101,14 @@ export function AuthProvider({ children }) {
       initializing,
       isAuthenticated: Boolean(user),
       login,
+      loginOrganization,
       logout,
       setPictureVersion,
       updateUser,
       sessionMessage,
       clearSessionMessage: () => setSessionMessage(''),
     }),
-    [user, initializing, login, logout, setPictureVersion, updateUser, sessionMessage],
+    [user, initializing, login, loginOrganization, logout, setPictureVersion, updateUser, sessionMessage],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

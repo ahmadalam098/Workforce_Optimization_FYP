@@ -1,7 +1,7 @@
 // Must match ContractLogic in the backend (Services/ContractLogic.cs).
 export const PRIORITY_OPTIONS = ['Low', 'Medium', 'High', 'Critical'].map((value) => ({ value, label: value }))
 
-export const BILLING_CYCLE_OPTIONS = ['Weekly', 'Biweekly', 'Monthly', 'Quarterly'].map((value) => ({ value, label: value }))
+export const BILLING_CYCLE_OPTIONS = ['Daily', 'Weekly', 'Biweekly', 'Monthly', 'Quarterly'].map((value) => ({ value, label: value }))
 
 export const CURRENCY_OPTIONS = ['USD', 'PKR', 'EUR', 'GBP', 'AED', 'SAR'].map((value) => ({ value, label: value }))
 

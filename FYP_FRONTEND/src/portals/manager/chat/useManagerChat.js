@@ -36,7 +36,7 @@ export function useManagerChat() {
 
   const loadConversations = useCallback(async () => {
     try {
-      setConversations(await managerChatApi.conversations())
+      setConversations((await managerChatApi.conversations()).map((c) => ({ ...c, id: c.organizationId })))
       setError('')
     } catch (problem) {
       setError(problem.message)

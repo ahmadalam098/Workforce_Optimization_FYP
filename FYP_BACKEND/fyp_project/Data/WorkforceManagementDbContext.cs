@@ -57,6 +57,18 @@ public partial class WorkforceManagementDbContext : DbContext
 
     public virtual DbSet<ChatMessage> ChatMessages { get; set; }
 
+    public virtual DbSet<EmployeeWarning> EmployeeWarnings { get; set; }
+
+    public virtual DbSet<ReviewEscalation> ReviewEscalations { get; set; }
+
+    public virtual DbSet<OrganizationNotificationState> OrganizationNotificationStates { get; set; }
+
+    public virtual DbSet<OrganizationSettings> OrganizationSettings { get; set; }
+
+    public virtual DbSet<AssignmentOffer> AssignmentOffers { get; set; }
+
+    public virtual DbSet<CallSession> CallSessions { get; set; }
+
     public virtual DbSet<NotificationState> NotificationStates { get; set; }
 
     public virtual DbSet<UserLogin> UserLogins { get; set; }

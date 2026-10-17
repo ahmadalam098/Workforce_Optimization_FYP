@@ -59,6 +59,12 @@ function validateContract(form, isEdit, live) {
   if (!errors.maxEmployees && form.minEmployees !== '' && Number(form.maxEmployees) < Number(form.minEmployees)) errors.maxEmployees = 'Maximum cannot be less than minimum.'
   if (!errors.maxBorrowedEmployees && form.maxBorrowedEmployees !== '' && form.maxEmployees !== '' && Number(form.maxBorrowedEmployees) > Number(form.maxEmployees)) errors.maxBorrowedEmployees = 'Cannot be more than the maximum employees.'
   if (!errors.startTime && !errors.endTime && form.startTime && form.startTime === form.endTime) errors.endTime = 'The daily end time cannot be the same as the start time.'
+  // A daily contract appoints its minimum employees every day, inside the daily window.
+  if (form.billingCycle === 'Daily') {
+    if (!errors.minEmployees && Number(form.minEmployees) < 1) errors.minEmployees = 'A daily contract needs at least 1 minimum employee.'
+    if (!form.startTime && !errors.startTime) errors.startTime = 'A daily contract needs the daily start time.'
+    if (!form.endTime && !errors.endTime) errors.endTime = 'A daily contract needs the daily end time.'
+  }
   return onlyErrors(errors)
 }
 
@@ -189,6 +195,15 @@ function ContractFormModal({ contract, organizations, defaultOrganizationId, onC
           <p className="form-section-title">Payment</p>
           <SelectField label="Currency" {...field('billingCurrency')} options={CURRENCY_OPTIONS} />
           <SelectField label="Billing cycle" {...field('billingCycle')} options={BILLING_CYCLE_OPTIONS} placeholder="Not set" />
+          {form.billingCycle === 'Daily' && (
+            <div className="form-grid__full">
+              <Alert type="info">
+                <strong>Daily contract.</strong> The minimum employees are appointed to the organization automatically every day, from the daily start time to the daily end time, and
+                released at the end of it. More employees can come through staff requests, on top of the minimum and up to the maximum. Set the minimum employees and the daily start and
+                end time above.
+              </Alert>
+            </div>
+          )}
           {number('baseHourlyRate', 'Base hourly rate', { step: '0.01' })}
           {number('extraHourlyRate', 'Extra hourly rate', { step: '0.01' })}
 

@@ -47,7 +47,16 @@ export const asManager = (token) => {
   }
 }
 
-/** What the organization side may do. Uses the shared service key; the chat server decides which organization the socket speaks for. */
+/** What a signed-in organization's browser may do: its own cookie is forwarded, so the API decides which managers it can talk to. */
+export const asSignedInOrganization = (token) => {
+  const headers = { Cookie: `accessToken=${token}` }
+  return {
+    send: (managerUserId, body) => call(`/api/organization/chat/conversations/${managerUserId}/messages`, { method: 'POST', headers, body: { body } }),
+    markRead: (managerUserId) => call(`/api/organization/chat/conversations/${managerUserId}/read`, { method: 'POST', headers }),
+  }
+}
+
+/** What the organization side may do in the test page. Uses the shared service key; the chat server decides which organization the socket speaks for. */
 export const asOrganization = (orgId, managerUserId) => {
   const headers = { 'X-Chat-Key': config.serviceKey }
   const base = `/api/internal/chat/organizations/${orgId}/managers/${managerUserId}`
@@ -59,3 +68,17 @@ export const asOrganization = (orgId, managerUserId) => {
 }
 
 export const internalOrganizations = () => call('/api/internal/chat/organizations', { headers: { 'X-Chat-Key': config.serviceKey } })
+
+/** What a signed-in person's browser may do with calls: their own cookie is forwarded, so the API decides who may call whom. */
+export const asUser = (token) => {
+  const headers = { Cookie: `accessToken=${token}` }
+  return {
+    getCall: (callId) => call(`/api/calls/${callId}`, { headers }),
+    answer: (callId, accept) => call(`/api/calls/${callId}/answer?accept=${accept ? 'true' : 'false'}`, { method: 'POST', headers }),
+    end: (callId) => call(`/api/calls/${callId}/end`, { method: 'POST', headers }),
+    cut: (callId, reason) => call(`/api/manager/calls/${callId}/cut`, { method: 'POST', headers, body: { reason } }),
+  }
+}
+
+/** The call rang for too long (shared service key). */
+export const markCallMissed = (callId) => call(`/api/internal/calls/${callId}/missed`, { method: 'POST', headers: { 'X-Chat-Key': config.serviceKey } })

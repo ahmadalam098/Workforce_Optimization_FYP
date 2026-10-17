@@ -39,12 +39,15 @@ function UsersPanel({ kind }) {
   const [pictureTick, setPictureTick] = useState()
   const isManager = kind === 'Organization Manager'
   const noun = kind.toLowerCase()
+  // Only a Business Owner can be deleted completely, and only after the account was deactivated.
+  const canDelete = kind === 'Business Owner'
 
   const [search, setSearch] = useState('')
   const [active, setActive] = useState('true')
   const [page, setPage] = useState(1)
   const [formTarget, setFormTarget] = useState(null) // null | 'new' | user
   const [toggleTarget, setToggleTarget] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const [passwordTarget, setPasswordTarget] = useState(null)
   const [orgTarget, setOrgTarget] = useState(null)
   const [notice, setNotice] = useFlashNotice()
@@ -72,6 +75,13 @@ function UsersPanel({ kind }) {
     const result = await usersApi.setActive(toggleTarget.userId, makeActive)
     setNotice(`${toggleTarget.fullName} was ${makeActive ? 'activated' : 'deactivated'}.${emailSentence(result)}`)
     setToggleTarget(null)
+    reload()
+  }
+
+  async function handleDelete() {
+    const result = await usersApi.remove(deleteTarget.userId)
+    setNotice(result?.message || `${deleteTarget.fullName} was deleted permanently.`)
+    setDeleteTarget(null)
     reload()
   }
 
@@ -204,6 +214,11 @@ function UsersPanel({ kind }) {
                             >
                               <Icon name={person.isActive ? 'ban' : 'checkCircle'} size={17} />
                             </button>
+                            {canDelete && !person.isActive && !isSelf && (
+                              <button type="button" className="icon-btn icon-btn--danger" onClick={() => setDeleteTarget(person)} aria-label={`Delete ${person.fullName} permanently`} title="Delete permanently">
+                                <Icon name="trash" size={17} />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -248,6 +263,18 @@ function UsersPanel({ kind }) {
             setPasswordTarget(null)
             setNotice(message)
           }}
+        />
+      )}
+
+      {/* Shown on the page itself, not inside the row: a deactivated row is drawn faded and the dialog would fade with it. */}
+      {deleteTarget && (
+        <ConfirmDialog
+          title={`Delete ${noun} permanently?`}
+          message={`${deleteTarget.fullName} will be removed for good and will disappear from every list. This cannot be undone. The audit log keeps what they did, but no longer links to the account.`}
+          confirmLabel="Delete permanently"
+          danger
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteTarget(null)}
         />
       )}
 

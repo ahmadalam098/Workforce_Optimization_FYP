@@ -180,7 +180,7 @@ Invoices: Draft -> Issued -> Paid, or Cancelled. Draft lines come from the contr
 | GET | /api/admin/finance/organizations | Payment status per organization and currency |
 | GET | /api/admin/salaries | Active employees with their current salary. Query: search, organizationId, hasSalary, page, pageSize |
 | GET | /api/admin/salaries/{employeeId}/history | All salary structures |
-| POST | /api/admin/salaries/{employeeId} | { monthlySalary, currency, overtimeRate, effectiveFrom, notes }; the current one ends the day before |
+| POST | /api/admin/salaries/{employeeId} | { monthlySalary, currency, effectiveFrom, notes }; the current one ends the day before |
 | GET | /api/admin/payroll | Runs |
 | GET | /api/admin/payroll/{id} | Run + one line per employee |
 | POST | /api/admin/payroll | { year, month } -> Draft from salary structures + approved overtime of that month (needs an exchange rate for non-PKR salaries) |
@@ -441,3 +441,222 @@ All `ManagerOnly`, under `/api/manager/settings`:
 | GET / PUT | `/notifications` | `{ inApp, requests, queries, invoices, employees, chat, expiry, expiryDays }` (GET also returns `systemExpiryDays`, `systemInAppEnabled`). `expiryDays` null = the admin's system value |
 
 The bell (`/api/manager/notifications`) follows these choices: `requests` = staff requests, `queries` = queries and complaints, `invoices` = invoices, `employees` = employees, allocations and payroll, `chat`, `expiry`.
+
+## Employee portal (login + starting dashboard)
+Employees cannot register themselves: the admin creates the account (Admin > Employees) and gives the credentials. The employee signs in on the same login page with the role **Employee**; forgot password / OTP / reset work exactly as for the other roles. After a successful sign-in the portal opens `/employee/dashboard`.
+
+- Login (`POST /api/UserLogin/loginUser`) now also accepts the role `Employee`.
+- Policy `EmployeeOnly` (role claim `Employee`).
+- `GET /api/employee/overview` (`Controllers/Employee/EmployeeOverviewController.cs`) - the signed-in employee: `{ hasEmployeeRecord, fullName, email, phone, employeeId, joiningDate, availabilityStatus, homeOrganization, workingOrganization, skills: [{ name, proficiency }], shift: { name, start, end } | null }`. Read only.
+- Security fix: `POST /api/Testing/addUser` was open to everyone (anyone could create a user with any role). It is now Admin only.
+- No new migration.
+
+## Employee queries and complaints (Employee portal -> Organization Manager)
+Employees send their own queries and complaints; the testing setup that logged an employee's query for them was removed.
+
+`EmployeeOnly`, `/api/employee/tickets`:
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/?status=Open\|Resolved` | My queries: `[{ ticketId, ticketNumber, subject, category, priority, status, stage, organization, createdAt, resolvedAt }]`. `stage` = With your manager / With the admin / Resolved |
+| GET | `/{id}` | One of mine, plus `description` and `answers` (internal notes are never shown) |
+| POST | `/` | `{ category: Query\|Complaint, subject, description, priority?: Low\|Medium\|High }` |
+
+- The query belongs to the organization the employee works for now (open allocation), otherwise their home organization. An employee in no organization gets 409; more than 20 a day gets 429.
+- On creation: `Ticket` (source Employee, status Open), audit `TICKET_CREATED` (this is what the manager's bell shows) and an email to every active manager of that organization (failure never undoes the query).
+- The manager answers it (`POST /api/manager/tickets/{id}/resolve`, emailed to the employee) or sends it to the admin (`forward`); the admin resolves severe ones. The employee follows all of it under My Queries.
+- Removed: `GET /api/manager/tickets/employees`, and `employeeId` in `POST /api/manager/tickets` and `POST /api/admin/tickets`. Both can still log a query **for an organization** until the Organization portal exists.
+
+## Employee - My Shifts
+`GET /api/employee/shifts` (`EmployeeOnly`, `Controllers/Employee/EmployeeShiftsController.cs`, read only): `{ hasEmployeeRecord, workingOrganization, shifts: [{ assignmentId, shiftName, startTime, endTime, startDate, endDate (null = ongoing), assignedBy, notes }] }`, newest first (max 200). The page works out today's shift and its status, the Monday-Sunday week and the Current / Upcoming / Past filters in the browser. No new migration.
+
+## Employee - My Salary (salary report)
+`GET /api/employee/salary?year=` (`EmployeeOnly`, `Controllers/Employee/EmployeeSalaryController.cs`, read only). It reads the same tables the admin and the organization manager use, so all three always agree:
+- `Salary_Structure` (what the admin decided: monthly salary, currency, since when, earlier salaries),
+- `Payroll_Run` / `Payroll_Item` (what the admin's payroll did with it).
+
+Response: `{ hasEmployeeRecord, year, years, currentSalary, history, months[12], summary }`. Each month has a `status`: `Paid`, `Approved` (waiting to be paid), `Draft` (being prepared - amounts are hidden because the admin can still change them), `NotProcessed`, `Upcoming` (future month) or `BeforeStart` (before the first salary; never counted as pending). Paid/Approved months carry base, overtime hours and amount, adjustment (+ note) and total; others carry `expectedAmount` (the monthly salary in force). `summary` = months paid and pending, with the amounts received and still to receive per currency (pending uses the approved total when known, otherwise the monthly salary).
+
+The same month in the manager's Salary Status (`GET /api/manager/salaries`) shows the same status and total. No new migration.
+
+## Admin - Salaries: no overtime rate, paid / unpaid months
+- The per-employee "Overtime / hour" was removed everywhere (column, form field, history, API fields `overtimeRate` / `effectiveOvertimeRate`). The overtime rate used by the Overtime module is always `salary / working hours x overtime multiplier` from Payment Rules. The old `Salary_Structure.overtime_rate` column is left in the database but is no longer read or written.
+- `GET /api/admin/salaries?year=` - every item now has `paidMonths` and `pendingMonths` of that year (months before the employee's first salary never count).
+- `GET /api/admin/salaries/{employeeId}/months?year=` - month by month for one employee: `{ employeeId, fullName, year, years, currentSalary, history, months[12], summary }` (same shape as the employee's report; the admin also sees the amounts of a draft payroll).
+- Both, and the employee's `GET /api/employee/salary`, use `Services/Finance/SalaryReportService.cs`, so the admin, the employee and the manager agree.
+
+## Employee - My Hours (week / month)
+`GET /api/employee/hours?from=yyyy-MM-dd&to=yyyy-MM-dd` (`EmployeeOnly`, `Controllers/Employee/EmployeeHoursController.cs`, read only, at most 62 days): `{ hasEmployeeRecord, days: [{ date, shiftName, startTime, endTime, scheduledHours, overtimeHours (Approved), pendingOvertimeHours }] }`.
+
+There is no attendance / clock-in table, so the hours of a day are the length of the shift assigned for that day (a night shift 22:00-06:00 is 8 h; when a shift is changed, the one that started last applies on that day) plus overtime recorded for that day (Approved counts, Pending is shown separately, Rejected is ignored). The page adds the days up into weeks (Monday-Sunday) and the month; today counts only up to the current time. No new migration.
+
+## Employee - Front Desk Calls (WebRTC preview, frontend only)
+`/employee/calls` is a **demo with no backend and no real WebRTC**: the customer call requests are simulated in the browser, nothing is stored and no microphone, camera or server is used (the page only reads the existing `GET /api/employee/overview` to show the employee's organization). It shows the planned flow - an employee approves or declines a customer's call request, calls the organization (front desk / manager / support team) by voice or video, and sees a call history. When real calling is built, the simulated parts (`portals/employee/calls/callsDemoData.js` and the `simulate` / fake-ringing steps in `EmployeeCallsPage.jsx`) are replaced by signalling and WebRTC.
+
+## Employee - notifications (bell)
+`EmployeeOnly`, `Controllers/Employee/EmployeeNotificationsController.cs`. Same read marker table (`Notification_State`) as the other bells; the first call marks everything older as seen; returns `enabled: false` when `NOTIFY_INAPP` is off.
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/api/employee/notifications?limit=20` | `{ enabled, unreadCount, alerts: [], items: [...], shifts: [{ assignmentId, startDate, endDate, name, startTime, endTime }] }` |
+| POST | `/api/employee/notifications/read-all` | Marks everything as read |
+
+What the employee is told (from `Audit_Log`, only about themselves, never what they did themselves): the answer to their query (`TICKET_RESOLVED`) and when it was sent to the admin (`TICKET_FORWARDED`; the manager's note is not shown); a shift assigned or removed; salary set or changed; payroll approved / paid when the run includes them (the payroll total is never shown); allocation, move and release; changes to their details, skills, activation, and a password reset by the admin. Overtime and organization news are not included. Alert: "Your shift starts at ..." is worked out in the page from `shifts` with the browser's local date and time.
+
+Also: a bulk shift assign / unassign (`POST /api/admin/shifts/{id}/assign|unassign`) now writes one `SHIFT_ASSIGNED` / `SHIFT_UNASSIGNED` audit entry per employee (entity Employee) besides the existing summary entry, so each employee is told.
+
+## Notification bells: "Mark all as read" and alerts
+Alerts (`alerts[]`: unread chat messages, contracts ending soon, "your shift starts at ...") are not audit entries, so the server cannot mark them as read. `NotificationBell.jsx` therefore counts `unreadCount - alerts.length` (unread audit entries, from the server's read marker) plus the alerts that were not yet marked as read in this browser. "Mark all as read" saves the server marker and remembers the current alerts in `localStorage` (`wfn-read-alerts-<userId>`). An alert counts again when its `key` changes (alert `key`, or its title when there is none): a new chat message, a different contract, or the next day's shift.
+
+## Employee - Settings
+`EmployeeOnly`, `/api/employee/settings` (`Controllers/Employee/EmployeeSettingsController.cs`). No new migration (uses `User_Login` and `Manager_Notification_Pref` from 014; for an employee only `in_app` is used).
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/profile` | `{ userId, fullName, email, phone, roleName, employeeId, joiningDate, homeOrganization, workingOrganization, skills }` |
+| PUT | `/profile` | `{ phone }` - the only detail an employee changes (name, email, organization, skills belong to the admin); the picture has its own endpoint |
+| POST | `/password` | `{ currentPassword, newPassword }` (password rules from the admin's Security settings) |
+| GET | `/security` | `{ signedInAt, previousSignInAt }` |
+| GET / PUT | `/notifications` | `{ inApp }` (GET also `systemInAppEnabled`). Off = `GET /api/employee/notifications` returns `enabled: false` and the bell is hidden |
+
+## Business Owner portal (login + starting dashboard)
+Business Owners cannot register themselves: the admin creates the account (Admin > Team > Business Owners, a welcome email is sent) and tells them the credentials. The owner signs in on the same login page with the role **Business Owner**; the JWT is kept in the HttpOnly `accessToken` cookie like for the other roles. "Forgot password" is the shared flow (OTP by email, kept in Redis, then reset) and has no role restriction. After a successful sign-in the portal opens `/owner/dashboard`.
+
+- Login (`POST /api/UserLogin/loginUser`) now also accepts the role `Business Owner`.
+- Policy `BusinessOwnerOnly` (role claim `Business Owner`).
+- `GET /api/business-owner/overview` (`Controllers/BusinessOwner/BusinessOwnerOverviewController.cs`): `{ userId, fullName, email, phone, roleName, signedInAt, previousSignInAt }`. The real dashboard figures are added when the requirements are known. No new migration.
+
+## Admin - delete a Business Owner permanently
+`DELETE /api/admin/users/{userId}` (`AdminUsersController`). Only for a **deactivated Business Owner** (409 with a message for an active account, any other role, yourself, or an owner who has records such as tickets or invoices - nothing is deleted then). It runs in one transaction: removes the owner's own rows (`User_Login`, `Notification_State`, `Manager_Notification_Pref`), detaches the `Audit_Log` entries they made (the actor name stays, `actor_user_id` becomes NULL), deletes the account and its picture file, then logs `USER_DELETED`. The Team > Business Owners page shows a trash button on deactivated owners with a confirmation.
+
+## Business Owner - dashboard, employees, notifications
+`BusinessOwnerOnly`, `Controllers/BusinessOwner/`. Read only; nothing is stored, no new migration. The figures mean the same as in the Admin Finance page:
+- **Revenue** = payments received (`Invoice_Payment.amount_pkr`) in the period; **Expense** = payroll runs that are Approved or Paid (`Payroll_Run.total_pkr`, by payroll month; drafts are ignored); **Profit** = revenue - expense (calculated).
+- **Pending payments** = issued invoices that are not fully paid (per organization and currency, with the overdue part); drafts, cancelled and paid invoices are left out. Not tied to the period.
+- **Profit per owner:** the profit is shared **equally** between the active Business Owners (there is no ownership percentage in the system); the odd paisa goes to the first owner. The page shows it only when there is more than one owner.
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/api/business-owner/dashboard?period=allTime\|thisMonth\|lastMonth\|thisYear` | organizations (total, by status), employees (total, active, inactive), money, owners and their shares, pending payments, utilization (`working / active employees`), employees working per organization (top 10 + other), allocation activity of the last 14 days (`Allocation_History`: Allocated / Reallocated / Released per day) |
+| GET | `/api/business-owner/employees?status=active\|inactive&search=&page=&pageSize=` | the employee list with `counts: { total, active, inactive }`; opened from the Employees card |
+| GET / POST | `/api/business-owner/notifications`, `/read-all` | the bell: only `INVOICE_PAYMENT_RECORDED` ("Revenue added") and `PAYROLL_APPROVED` ("Expense added"), each saying what it does to the profit. A revenue or expense can only grow today (a payment or an approved payroll is never taken back); add a removal's audit action to `RevenueRemoved` / `ExpenseRemoved` in `BusinessOwnerNotificationsController` when one exists |
+
+The dashboard page asks again every 10 seconds (while the tab is visible), when something is saved anywhere, and when the tab is focused, so the utilization, the bars and the allocation chart change when an allocation changes. The page uses the same layout, colours and fonts as the Admin and Manager dashboards (gold hero, stat cards, gold bar list); the activity chart uses the same three status colours as the Admin dashboard (green, blue, gold), checked with the dataviz validator (all pairs pass; the gold is below 3:1 contrast, so the chart has a legend, a tooltip and a "Show as table" view).
+
+## Business Owner - Settings
+`BusinessOwnerOnly`, `/api/business-owner/settings` (`Controllers/BusinessOwner/BusinessOwnerSettingsController.cs`). No new migration (uses `User_Login` and `Manager_Notification_Pref` from 014; for an owner only `in_app` is used).
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/profile` | `{ userId, fullName, email, phone, roleName, createdAt }` |
+| PUT | `/profile` | `{ fullName, phone }` - the owner changes their own name and phone; the email and role are the admin's; the picture has its own endpoint |
+| POST | `/password` | `{ currentPassword, newPassword }` (password rules from the admin's Security settings) |
+| GET | `/security` | `{ signedInAt, previousSignInAt }` |
+| GET / PUT | `/notifications` | `{ inApp }` (GET also `systemInAppEnabled`). Off = `GET /api/business-owner/notifications` returns `enabled: false` and the bell is hidden |
+
+## Organization module - register, login, forgot password, dashboard
+The organization has its own register and login, apart from the staff accounts (Admin, Manager, Employee, Business Owner). It uses the `Organization` table (it already has a `password` column, so no migration). Frontend pages: `/organization/register`, `/organization/login`, `/organization/forgot-password`, `/organization/verify-otp`, `/organization/reset-password`, then `/organization/dashboard` (a starter page).
+
+| Method | Path | What it does |
+|---|---|---|
+| POST | `/api/organization/auth/register` | `{ name, email, phone, country, address, password, confirmPassword }` - creates the organization as **Pending** with a BCrypt-hashed password, audit `ORGANIZATION_REGISTERED` (the admin sees it in the Organizations page and in the admin bell, and approves it there), and a best-effort confirmation email. 409 when the email exists |
+| POST | `/api/organization/auth/login` | `{ email, password }` - sets the HttpOnly `accessToken` cookie. A Pending organization may sign in (the dashboard says it waits for approval); Rejected / Suspended get 403 |
+| POST | `/api/organization/auth/send-otp` | emails a 6-digit OTP, kept in Redis as `org-otp:{email}` for 5 minutes |
+| POST | `/api/organization/auth/verify-otp` | checks it, deletes it, and allows a reset for 10 minutes (`org-reset:{email}`) |
+| POST | `/api/organization/auth/reset-password` | `{ email, newPassword, confirmPassword }` - works for an organization the admin created without a password too (its first password) |
+| GET | `/api/organization/overview` | `OrganizationOnly`: the signed-in organization (name, email, phone, country, address, status, dates) |
+
+The token (`TokenService.CreateOrganizationToken`) has the role **Organization**, a claim `org_id`, and a NameIdentifier `org-{id}` that is never a plain number, so nothing that reads a user id can mistake an organization for a user (and the organization's `userId` in the session is null, so no picture or person lookup uses its id). `GET /api/Auth/me` also restores an organization session. Policy `OrganizationOnly`. The OTP keys are separate from the staff flow (`otp:` / `reset:`).
+
+## Daily contracts (migration 015)
+A contract whose **billing cycle is "Daily"** has its **minimum employees appointed every day**, inside the contract's daily start and end time. More employees come through **staff requests, on top of the minimum**, and the contract's maximum still limits the total. Run `FYP_DB/migrations/015_daily_contracts.sql` (adds `Employee_Allocation.daily_contract_id`; friend's DB needs 001-003, 005-015).
+
+- **Contract rules** (`ContractLogic.Validate`): a Daily contract needs `minEmployees >= 1`, a `startTime` and an `endTime` (different; an end before the start means the window runs through the night). The other billing cycles are unchanged. Billing keeps working as before: the first `min` employees on duty are the base rate, anything above is the extra rate.
+- **The appointment** (`Services/Workforce/DailyStaffingService.cs`): for every active Daily contract, the missing minimum is appointed from the free pool (active, no open allocation, Available or Idle). Order: people who worked this contract in the last days, then the organization's own employees, then (only if `borrowing_allowed`) others; best rating first. It uses the normal `AllocationService`, so every rule applies (maximum, active contract and organization). Each appointment has `expected_end = the window's end`, is marked with `daily_contract_id`, is written to `Allocation_History` and to the audit log (`EMPLOYEE_ALLOCATED`), so the employee's, the manager's and the admin's bells show it. When the window is over, the appointments are released automatically and appointed again the next day. Employees added through staff requests are not marked: they are the extra ones and are never released by this.
+- **Time zone:** the contract times are read in the time zone chosen in Settings, or the server's own time zone when it is "this computer".
+- **Automatic:** `DailyStaffingWorker` (hosted service) looks every 5 minutes: it ends finished appointments and appoints the missing minimum once the day's window has started. Running again only fills what is missing. A shortage (no free employee) is written once a day per contract as `DAILY_STAFFING_SHORT` (admin bell).
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/api/admin/daily-staffing?contractId=` | where each active daily contract stands today: `{ contractNumber, orgName, min, max, window, state (Complete / Short / Waiting / WindowEnded / NotStarted / Finished / OrganizationInactive / NoWindow), appointed, atOrganizationNow, extra, stillShort, employees[] }` |
+| POST | `/api/admin/daily-staffing/run` | appoint the missing minimum of every daily contract now (also before the window starts) |
+| POST | `/api/admin/daily-staffing/run/{contractId}` | the same for one contract |
+
+Admin screens: the Billing cycle list has "Daily" (with a hint and the checks) in the contract form; an active daily contract shows a **Daily staffing** card on its details page (minimum, appointed today, extra from requests, missing, button "Appoint today's minimum now"); the Contracts page has "Appoint daily minimums".
+
+## Contracts are asked for by the organization (not created by the admin)
+- **Removed:** `POST /api/admin/contracts` and every "New contract" button / `/admin/contracts/new` page in the Admin portal. The admin keeps: list, details, **edit** (set the hourly rates and priority), approve, reject, terminate, rules.
+- **New, `OrganizationOnly`, `Controllers/Organization/OrganizationContractsController.cs`:**
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/api/organization/contracts` | its own contracts `{ canCreate, organizationStatus, items[] }` |
+| GET | `/api/organization/contracts/{id}` | one of its contracts: terms, `canEdit` (Pending only), the admin's decisions with the reason, and for an active Daily contract `dailyStaffing` (today's status) |
+| POST | `/api/organization/contracts` | asks for a contract (Pending, version 1): `{ startDate, endDate, startTime, endTime, minEmployees, maxEmployees, borrowingAllowed, maxBorrowedEmployees, billingCurrency, billingCycle, note }`. Needs an **active** organization (409 otherwise), at most 3 Pending requests, and the Daily rules (min >= 1, start and end time). No rates and no priority: they are the admin's |
+| PUT | `/api/organization/contracts/{id}` | change a request while it is **Pending**; the rates and priority the admin already set are kept |
+
+- **Review:** the request is audited as `CONTRACT_REQUESTED` (admin bell, and the organization manager's bell), then the admin opens it on the Contracts page, edits it to set the hourly rates, and approves or rejects it. **Approve now needs the base hourly rate** (409 "Set the base hourly rate first"), because invoices are worked out from it.
+- Organization pages: `/organization/contracts` (list + "Ask for a contract") and `/organization/contracts/:id` (terms, the admin's decision, daily staffing, "Change request" while Pending). No new migration.
+
+## Changing an approved contract (migration 016)
+Run `FYP_DB/migrations/016_contract_changes.sql` (extends `Contract_Modification_Request`: `requested_by_org_id`, `proposed_start_time`, `proposed_end_time`, `proposed_billing_cycle`, `effective_date`, `applied_at`; friend's DB needs 001-003, 005-016).
+
+- The **organization** asks to change its **approved** contract. It may change: minimum / maximum employees, billing cycle, end date, daily start / end time, borrowing. **Never the hourly rates** (fixed; they are not even in the request). A reason is required (10-500 characters) and the change can start on a chosen day (`effectiveDate`, not in the past; empty = as soon as approved). Only what differs from the contract is stored. One change may wait at a time; the maximum cannot go below the employees working there now. **The current contract keeps running** while the admin decides.
+- `POST /api/organization/contracts/{id}/changes` (ask), `POST /api/organization/contracts/changes/{modificationId}/withdraw` (take back a waiting one). `GET /api/organization/contracts/{id}` now also returns `canRequestChange`, `pendingChange` (current vs asked) and `changeHistory` (outcome, the admin's reply, when it started).
+- **Notification:** the request is audited as `CONTRACT_MODIFICATION_REQUESTED` with the comment (admin bell and the organization manager's bell); the Contracts list shows "Change requested" (`hasPendingChange`).
+- **Admin**, `Controllers/Admin/AdminContractChangesController.cs`: `GET /api/admin/contract-changes?contractId=&status=` (default Pending; `all`), `POST /{id}/approve` `{ note? }`, `POST /{id}/reject` `{ note }` (the reason is required). Screen: the "Changes asked by the organization" card on the contract details page.
+- **Approve:** `ContractModificationService.ApplyAsync` saves a **new contract version** (the change reason is its summary; rates, priority and currency are kept) and mirrors it to the contract row, so everything that reads the contract follows: allocation limits, billing (base / extra employees), reports and the daily staffing (it runs for that contract right away). If it cannot be applied (for example more employees work there than the new maximum) nothing is saved and the admin is told. A change whose start day is later is **approved and waits**: the current terms keep running until that day, then the background worker (`DailyStaffingWorker`, every 5 minutes) puts it in force. Audit: `CONTRACT_MODIFICATION_APPROVED` / `_APPLIED`; the decision is also in `Approval_Decision` (`ContractModification`).
+- **Reject:** the reason is required; nothing changes and the previous contract keeps running; the organization sees the reason. Audit `CONTRACT_MODIFICATION_REJECTED`.
+- The organization is emailed about the decision (best effort). The admin can still edit an active contract directly (as before).
+
+## Extra-employee requests go to the organization manager; minimum staff is appointed by the manager (no migration)
+
+- **Organization** (`Controllers/Organization/OrganizationRequestsController.cs`, policy `OrganizationOnly`): `GET /api/organization/requests?status=` (Pending / Approved / Unstaffed / Rejected / Cancelled), `GET /{id}` (numbers, employees working on it, the manager's decisions, `canCancel`), `GET /skills`, `POST` `{ requiredEmployees, skillId?, priority, startDatetime, endDatetime, reason }`, `POST /{id}/cancel` (only while nobody works on it). A request is saved `Pending` for the organization's own active contract; the contract maximum is checked up front (the minimum is always counted, extras come on top of it). Audit `WORKFORCE_REQUEST_CREATED` with no actor, so the organization manager's bell shows it. The admin is **not** asked.
+- **Manager** (`ManagerRequestsController`): `POST /api/manager/requests/{id}/approve` `{ note? }` and `/reject` `{ note }` (reason required, the organization is emailed). Staffing a Pending request still approves it. A request logged by the manager is approved at once. `summary.waiting` replaces `waitingForAdmin`. The admin can still see and act on requests (override).
+- **Minimum staff, by hand** (`Controllers/Manager/ManagerMinimumStaffingController.cs`, `ManagerOnly`): `GET /api/manager/minimum-staffing` (each active contract of the manager's organizations: min, max, appointed, missing, extra, staff, `canStaff`, `hint`), `GET /{contractId}/candidates?search=`, `POST /{contractId}/staff` `{ employeeIds }`, `POST /release/{allocationId}`. Normal allocation rules apply (maximum, borrowing, availability). For a **daily** contract the employees get `daily_contract_id` and end with today's window (appoint again each day); other contracts keep them until released. Audit `MINIMUM_STAFF_APPOINTED` + `EMPLOYEE_ALLOCATED`.
+- **AI later:** `DailyStaffingWorker` still ends finished daily appointments but no longer appoints the minimum unless `Staffing:AutoMinimum` is `true` in appsettings (default `false`). The admin card "Daily staffing" is now a read-only view.
+- **Screens:** Organization portal > Staff Requests (list, ask, details, cancel); Manager portal > Minimum Staff, and Staff Requests now has Approve / Reject on the details page.
+
+## Organization <-> organization manager chat (no migration)
+
+- The same `Chat_Message` table and Node.js chat server (`FYP_CHAT`). One conversation = one organization + one of its managers. An organization can talk **only to the managers linked to it** (`Organization_Manager`), and a manager only to the organizations linked to them (`ChatService.IsAssignedAsync` is checked on every read / send / mark-read, on both sides). A manager with 3 organizations has 3 conversations; an organization with 2 managers has 2.
+- **Organization** (`Controllers/Organization/OrganizationChatController.cs`, `OrganizationOnly`): `GET /api/organization/chat/conversations` (its managers with last message and unread), `GET .../conversations/{managerUserId}/messages?before&limit`, `POST .../messages {body}`, `POST .../read`. 403 for a manager that is not linked.
+- **Chat server:** it now accepts the organization's own sign-in cookie (role `Organization`, claim `org_id`). The organization socket joins `org:{orgId}`; `chat:send { managerUserId, body }` and `chat:read { managerUserId }` forward the organization's cookie to the API, which decides. The `/dev` test page still works. `npm test` has 7 new checks (F1-F7).
+- **Frontend:** Organization portal > Chat (`/organization/chat`); both chat screens share `components/chat/ChatView.jsx`.
+
+## Employee reviews: organization -> manager -> admin (migration 017)
+
+Run `FYP_DB/migrations/017_employee_reviews.sql` (extends `Organization_Reviews` with `status`, `handled_*`; adds `Employee_Warning` and `Review_Escalation`).
+- **Organization** (`OrganizationEmployeesController`, `/api/organization/employees`): `GET ?search&status=working|former|toReview`, `GET /{id}` (information, skills, rating, **the reviews of all organizations** with `mine`, periods of work, `canReview`; no CNIC / email / salary; 404 for an employee who never worked for this organization), `POST /{id}/reviews { rating 1-5, comment (5-500), allocationId? }`. One review per period of work (allocation); an organization can review again when the employee works for it next time. `Employee.Rating` becomes the average of all reviews. Audit `EMPLOYEE_REVIEW_SUBMITTED` (entity `EmployeeReview`, no actor) -> the manager's bell.
+- **Manager** (`ManagerReviewsController`, `/api/manager/reviews`): `GET summary`, `GET ?status&bad=true&orgId&search&page`, `GET /{id}` (other reviews, warnings, escalation), `POST /{id}/warn { message }` (warning saved + audit `EMPLOYEE_WARNED` -> employee bell + email), `POST /{id}/dismiss { note? }`, `POST /{id}/escalate { message }` (creates a `Review_Escalation`, audit `REVIEW_ESCALATED`). A rating of 1-2 is a "bad review" (`EmployeeReviewLogic.BadRatingMax`). Only reviews of the manager's own organizations; 404 otherwise. Status: New -> Warned -> Escalated -> Resolved, or Dismissed.
+- **Admin** (`AdminReviewEscalationsController`, `/api/admin/review-escalations`): `GET ?status=Pending|Decided|all`, `GET /pending-count`, `GET /{id}`, `POST /{id}/decide { action: Deactivate|Warn|Dismiss, response (required) }`. **Deactivate** releases the employee from every open allocation, sets the user inactive and the employee Offline, emails them; the existing sign-in check ("Account is inactive") then keeps them out until the admin activates them again (Employee Pool). The response goes to the manager (audit `REVIEW_ESCALATION_DECIDED`).
+- **Screens:** Organization > Employees (list, details, Review); Manager > Employee Reviews; Admin > Review Requests.
+
+## Organization: notifications, invoices, reports (migration 018)
+
+Run `FYP_DB/migrations/018_organization_notifications.sql` (`Organization_Notification_State`: an organization is not a user, so its read marker has its own table).
+- **Bell** (`OrganizationNotificationsController`, `/api/organization/notifications`): `GET ?limit=20` and `POST /read-all`, same shape as the other bells. Items come from the audit log, only for this organization: organization approved / rejected / suspended / updated, contract approved / rejected / terminated / updated and contract changes approved / applied / rejected, staff request approved / rejected (the manager's decision), employees allocated / released at the organization, invoices issued / cancelled / payment recorded (never a draft). Alerts: unread messages from its managers, overdue invoices, contracts ending within `NOTIFY_CONTRACT_EXPIRY_DAYS`. Respects the system switch `NOTIFY_INAPP`.
+- **Invoices** (`OrganizationBillingController`, `/api/organization/billing`, read only): `GET summary` (per currency: invoiced, paid, outstanding, overdue), `GET invoices?search&status=Issued|PartiallyPaid|Overdue|Paid|Cancelled&page&pageSize`, `GET invoices/{id}` (lines + payments). Drafts are hidden (404); another organization's invoice is 404; no verification or PKR data.
+- **Reports** (`OrganizationReportsController`, `/api/organization/reports`): `GET usage?from&to` (default last 30 days; max 366: employee-hours, peak / average on duty, contract min-max and use, day by day, per employee with the organization's own rating, staff request counts, reviews given) and `GET financial?from&to` (default last 6 months; max 24: invoiced / paid per month and currency, outstanding, overdue). Only the organization's own data - no payroll or profit.
+- **Screens:** Organization > the bell in the header, Invoices (+ details), Reports (Employees & hours, Billing; CSV export).
+
+## Organization Settings (migration 019)
+
+Run `FYP_DB/migrations/019_organization_settings.sql` (`Organization_Settings`: notification choices + last / previous sign-in).
+- `OrganizationSettingsController`, `/api/organization/settings`: `GET|PUT profile` (phone, country, address are editable; name, email and status are read only and changed by the admin; registration and approval dates are shown), `POST password { currentPassword, newPassword }` (the admin's password rules apply; must differ from the old one), `GET security` (`signedInAt`, `previousSignInAt`, written by the organization login), `GET|PUT notifications { inApp, contracts, requests, employees, invoices, chat, expiry, expiryDays }`.
+- The bell (`/api/organization/notifications`) follows the choices: `inApp` off = bell hidden; `contracts` (organization + contract decisions), `requests`, `employees`, `invoices` (also the overdue alert), `chat` (alerts), `expiry` / `expiryDays` (null = the admin's `NOTIFY_CONTRACT_EXPIRY_DAYS`).
+- Screen: Organization > Settings (Profile, Security, Notifications).
+
+## Assignment offers and audio / video calls (migration 020; WebRTC media is a dummy)
+
+Run `FYP_DB/migrations/020_offers_and_calls.sql` (`Assignment_Offer`, `Call_Session`).
+
+**Hierarchy (until the AI allocation exists):** the organization asks for employees (Staff Requests / contract minimum) -> the organization manager approves it and **forwards it to employees of the pool as offers** -> the employee accepts or declines in their portal -> on accept the employee is allocated (usual rules: maximum, borrowing, availability) and shows **online** on the organization's Live Team screen -> organization, employee and manager can call each other; the manager can **cut any call** of their employees / organizations (reason required, recorded). Offers nobody answers expire after 24 hours.
+- **Manager** (`/api/manager/offers`): `POST requests/{requestId}` and `POST minimum/{contractId}` `{ employeeIds }` (only an *Approved* request; only as many as still needed, counting waiting offers; busy / inactive employees are refused per employee), `GET ?status`, `POST {id}/cancel`. The pickers have **Send to employees** (offer) and **Assign directly / Appoint directly** (the old immediate allocation, kept as an override).
+- **Employee** (`/api/employee/offers`): `GET`, `POST {id}/accept`, `POST {id}/decline { note? }`. If accepting cannot be done (request full, contract changed, employee became busy ...) the offer becomes `Failed` with the reason.
+- **Organization** (`GET /api/organization/team`): the employees working for it now.
+- **Calls** (`CallsController`, policy `CallParticipant` = Employee / Organization Manager / Organization): `GET /api/calls/contacts`, `GET /api/calls/history`, `POST /api/calls { targetType, targetId, media: audio|video }`, `GET /api/calls/{id}`, `POST /{id}/answer?accept=`, `POST /{id}/end`. Who may call whom (`CallService.LinkedAsync`): employee <-> the organization they work for now; employee <-> a manager of that organization or of their home organization; manager <-> an organization they manage. Nobody can call someone busy in another call. Ringing calls nobody picks up become `Missed`.
+- **Manager monitor** (`/api/manager/calls`): `GET monitor` (`live`, `recent` of their employees and organizations), `POST {id}/cut { reason }` (status `Cut`; audit `CALL_CUT`, the employee's bell shows `CALL_CUT_BY_MANAGER`). `POST /api/internal/calls/{id}/missed` is used by the chat server (shared key).
+- **Chat server** (`FYP_CHAT/src/calls.js`): employees now connect too. Events: `call:invite`, `call:answer`, `call:end`, `call:cut` (manager), `call:signal` (relays WebRTC offer / answer / ICE untouched between the two people of an open call), `presence` / `presence:snapshot` (who is online), `calls:changed` (managers' monitor refreshes). Every rule is decided by the API with the user's own cookie. Closing the last tab during a call hangs it up for the other side.
+- **WebRTC later:** only `FYP_FRONTEND/src/components/calls/callMedia.js` has to be replaced (microphone / camera, `RTCPeerConnection`, offer / answer / ICE through `sendSignal`). The call flow, screens, server and database stay.
+- **Screens:** Employee > My Assignments, Calls; Organization > Live Team; Manager > Assignment Offers, Calls (Call someone / My calls), and **Performance Monitoring** (the live calls and the finished ones of the manager's employees, with Cut this call); the incoming-call screen shows on any page of the portal.

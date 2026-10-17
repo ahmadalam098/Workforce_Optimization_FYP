@@ -70,6 +70,16 @@ public class ContractModificationRequest
     [Column("reviewed_at")] public DateTime? ReviewedAt { get; set; }
     [Column("result_version_no")] public int? ResultVersionNo { get; set; }
     [Column("created_at")] public DateTime CreatedAt { get; set; }
+
+    // Migration 016: a change asked for by the organization itself (never the hourly rates: they are fixed).
+    [Column("requested_by_org_id")] public int? RequestedByOrgId { get; set; }
+    [Column("proposed_start_time")] public TimeOnly? ProposedStartTime { get; set; }
+    [Column("proposed_end_time")] public TimeOnly? ProposedEndTime { get; set; }
+    [Column("proposed_billing_cycle"), MaxLength(30)] public string? ProposedBillingCycle { get; set; }
+    /// <summary>The day the change should start. Null: as soon as the admin approves.</summary>
+    [Column("effective_date")] public DateOnly? EffectiveDate { get; set; }
+    /// <summary>When the new version was put in force (an approved change can wait for its effective date).</summary>
+    [Column("applied_at")] public DateTime? AppliedAt { get; set; }
 }
 
 [Table("Approval_Decision")]

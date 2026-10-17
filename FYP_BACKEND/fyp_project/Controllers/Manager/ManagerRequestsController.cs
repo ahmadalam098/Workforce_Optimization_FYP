@@ -29,6 +29,11 @@ namespace fyp_project.Controllers.Manager
         [Required(ErrorMessage = "Give a reason."), StringLength(255), MinTrimmedLength(5)] public string Reason { get; set; } = string.Empty;
     }
 
+    public class ManagerDecisionRequest
+    {
+        [StringLength(500)] public string? Note { get; set; }
+    }
+
     public class ManagerStaffRequest
     {
         [Required, MinLength(1, ErrorMessage = "Choose at least one employee.")]
@@ -39,8 +44,9 @@ namespace fyp_project.Controllers.Manager
     /// Organization Manager portal: the staff requests of the manager's organizations, and manual staffing of them from the employee pool.
     /// This is the fallback for when the AI allocation does not work: the manager looks at the free employees and allocates them to the
     /// request, with the same rules as the admin (approved organization, active contract, capacity, borrowing ...).
-    /// Allocating employees to a request that still waits for the admin approves it (the manager is the one handling the organization);
-    /// the admin sees who approved it. The manager can also log a new request (for example one more employee for a specific time).
+    /// The manager is the one who decides on the requests of the organization (the organization asks for extra employees here, not at the admin):
+    /// approve or reject it, then allocate employees. Allocating employees to a request that still waits approves it. The admin sees who decided.
+    /// The manager can also log a new request (for example one more employee for a specific time); it is approved at once.
     /// </summary>
     [ApiController]
     [Authorize(Policy = "ManagerOnly")]
@@ -104,7 +110,7 @@ namespace fyp_project.Controllers.Manager
                 .ToListAsync();
             return Ok(new
             {
-                waitingForAdmin = requests.Count(r => r.Status == Pending),
+                waiting = requests.Count(r => r.Status == Pending),
                 approvedShort = requests.Count(r => r.Status == Approved && r.Staffed < r.Required),
                 fullyStaffed = requests.Count(r => r.Status == Approved && r.Staffed >= r.Required),
                 rejected = requests.Count(r => r.Status == Rejected),
@@ -229,8 +235,9 @@ namespace fyp_project.Controllers.Manager
                 contract = contract == null ? null : new { contractNumber = contract.ContractNumber, minEmployees = contract.MinEmployees, maxEmployees = contract.MaxEmployees, borrowingAllowed = contract.BorrowingAllowed, allocatedToOrganizationNow = allocatedToOrg },
                 warnings,
                 canStaff = (request.Status == Pending || request.Status == Approved) && stillNeeded > 0,
-                // Allocating to a request that still waits for the admin approves it.
+                // Allocating to a request that still waits for the manager approves it.
                 willApprove = request.Status == Pending,
+                canDecide = request.Status == Pending,
                 allocations = allocations.Select(a => new { a.allocationId, a.employeeId, a.userId, a.employeeName, a.allocationType, a.status, a.startDatetime, a.expectedEndDatetime, a.actualEndDatetime, isOpen = openIds.Contains(a.allocationId) }),
                 reviews,
             });
@@ -281,6 +288,37 @@ namespace fyp_project.Controllers.Manager
             return Ok(rows.Select(r => new { r.employeeId, r.userId, r.hasPicture, r.fullName, r.availabilityStatus, r.rating, r.homeOrgName, r.isBorrowed, r.matchesSkill, skills = skills.GetValueOrDefault(r.employeeId) ?? new List<string?>() }));
         }
 
+        // POST api/manager/requests/5/approve   { note }
+        [HttpPost("{requestId:int}/approve")]
+        public Task<IActionResult> Approve(int requestId, [FromBody] ManagerDecisionRequest? body) =>
+            DecideAsync(requestId, Approved, body?.Note, false, "WORKFORCE_REQUEST_APPROVED", "Request approved. Now choose the employees for it.");
+
+        // POST api/manager/requests/5/reject   { note }   (the reason is required: the organization sees it)
+        [HttpPost("{requestId:int}/reject")]
+        public Task<IActionResult> Reject(int requestId, [FromBody] ManagerDecisionRequest? body) =>
+            DecideAsync(requestId, Rejected, body?.Note, true, "WORKFORCE_REQUEST_REJECTED", "Request rejected.");
+
+        private async Task<IActionResult> DecideAsync(int requestId, string decision, string? note, bool requireNote, string auditAction, string message)
+        {
+            note = ContractLogic.Clean(note);
+            if (requireNote && note == null) return Problem("note", "Give a reason. The organization will see it.");
+
+            var mine = await MineAsync(requestId);
+            if (mine == null) return NotFound(new { message = "Staff request not found." });
+            var request = await _db.WorkforceRequests.FirstAsync(r => r.WorkforceRequestId == requestId);
+            if (request.Status != Pending) return Conflict(new { message = $"This request is already {request.Status?.ToLower()}." });
+
+            request.Status = decision;
+            _db.WorkforceRequestReviews.Add(new WorkforceRequestReview { WorkforceRequestId = requestId, Decision = decision, Note = note, ReviewedBy = CurrentUserId, ReviewedAt = DateTime.UtcNow });
+            await _db.SaveChangesAsync();
+
+            await _audit.LogAsync(CurrentUserId, auditAction, "WorkforceRequest", requestId, note ?? "Decided by the organization manager.");
+            var emailNote = request.OrgId.HasValue
+                ? await _mailer.SendOrganizationEventAsync(CurrentUserId, request.OrgId.Value, decision == Approved ? OrganizationEvent.StaffRequestApproved : OrganizationEvent.StaffRequestRejected, note)
+                : string.Empty;
+            return Ok(new { message = message + emailNote });
+        }
+
         // POST api/manager/requests/5/staff   { employeeIds: [..] }   (manual allocation to an approved request)
         [HttpPost("{requestId:int}/staff")]
         public async Task<IActionResult> Staff(int requestId, [FromBody] ManagerStaffRequest body)
@@ -289,7 +327,7 @@ namespace fyp_project.Controllers.Manager
             if (request == null) return NotFound(new { message = "Staff request not found." });
             if (request.Status != Approved && request.Status != Pending) return Conflict(new { message = $"This request is {request.Status?.ToLower()}, so employees cannot be allocated to it." });
 
-            // A request that still waits for the admin is approved by the manager when they staff it (undone below if nobody could be allocated).
+            // A request that still waits for the manager's decision is approved when they staff it (undone below if nobody could be allocated).
             var wasPending = request.Status == Pending;
             WorkforceRequestReview? review = null;
             if (wasPending)
@@ -344,7 +382,7 @@ namespace fyp_project.Controllers.Manager
             return Ok(new { message, allocated = done, results });
         }
 
-        // POST api/manager/requests   (log a staff request for one of my organizations; the admin decides on it)
+        // POST api/manager/requests   (log a staff request for one of my organizations; as the manager decides, it is approved at once)
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] ManagerCreateRequest request)
         {
@@ -383,16 +421,17 @@ namespace fyp_project.Controllers.Manager
                     StartDatetime = start,
                     EndDatetime = end,
                     Reason = request.Reason.Trim(),
-                    Status = Pending,
+                    Status = Approved,
                     CreatedAt = DateTime.UtcNow,
                 });
+                _db.WorkforceRequestReviews.Add(new WorkforceRequestReview { WorkforceRequestId = requestId, Decision = Approved, Note = "Logged and approved by the organization manager.", ReviewedBy = CurrentUserId, ReviewedAt = DateTime.UtcNow });
                 if (request.SkillId.HasValue) _db.WorkforceRequestSkills.Add(new WorkforceRequestSkill { WorkforceRequestId = requestId, SkillId = request.SkillId.Value });
                 await _db.SaveChangesAsync();
             }
 
             await _audit.LogAsync(CurrentUserId, "WORKFORCE_REQUEST_CREATED", "WorkforceRequest", requestId,
                 $"{organization.OrgName}: {request.RequiredEmployees} employee(s), {request.Priority} (logged by the organization manager)");
-            return Ok(new { message = "Staff request logged. It is waiting for the admin's decision.", requestId });
+            return Ok(new { message = "Staff request logged and approved. Choose the employees for it.", requestId });
         }
     }
 }

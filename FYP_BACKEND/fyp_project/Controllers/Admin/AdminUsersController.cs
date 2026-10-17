@@ -15,19 +15,22 @@ namespace fyp_project.Controllers.Admin
         private readonly RoleService _roles;
         private readonly AuditService _audit;
         private readonly AccountMailer _mailer;
+        private readonly string _uploadsRoot;
 
         public AdminUsersController(
             WorkforceManagementDbContext db,
             IdGenerator ids,
             RoleService roles,
             AuditService audit,
-            AccountMailer mailer)
+            AccountMailer mailer,
+            IWebHostEnvironment environment)
         {
             _db = db;
             _ids = ids;
             _roles = roles;
             _audit = audit;
             _mailer = mailer;
+            _uploadsRoot = Path.Combine(environment.ContentRootPath, "uploads");
         }
 
         // GET api/admin/users?roleType=Admin&search=&active=&page=1&pageSize=10
@@ -225,6 +228,57 @@ namespace fyp_project.Controllers.Admin
 
             var emailNote = await _mailer.SendPersonEventAsync(CurrentUserId, userId, makeActive ? PersonEvent.Activated : PersonEvent.Deactivated, request.Reason);
             return Ok(new { message = (makeActive ? "Account activated." : "Account deactivated.") + emailNote, userId, isActive = makeActive });
+        }
+
+        // DELETE api/admin/users/5   (permanently deletes a DEACTIVATED Business Owner; the account is gone from every list)
+        [HttpDelete("{userId:int}")]
+        public async Task<IActionResult> Delete(int userId)
+        {
+            var user = await _db.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.UserId == userId);
+            if (user == null) return NotFoundMessage("User not found.");
+            if (user.UserId == CurrentUserId) return ConflictMessage("You cannot delete your own account.");
+            if (RoleNames.Normalize(user.Role?.RoleType) != "businessowner")
+                return ConflictMessage("Only a Business Owner account can be deleted completely.");
+            if (user.IsActive == true) return ConflictMessage("Deactivate the account first. Only a deactivated account can be deleted.");
+
+            var name = user.Name;
+            var email = user.Email;
+            var picture = user.ProfilePicturePath;
+
+            await using var transaction = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                // Rows that belong only to this person.
+                await SafeQuery.IfSchemaMissing(async () => await _db.UserLogins.Where(l => l.UserId == userId).ExecuteDeleteAsync(), 0);
+                await SafeQuery.IfSchemaMissing(async () => await _db.NotificationStates.Where(s => s.UserId == userId).ExecuteDeleteAsync(), 0);
+                await SafeQuery.IfSchemaMissing(async () => await _db.ManagerNotificationPrefs.Where(p => p.UserId == userId).ExecuteDeleteAsync(), 0);
+                // The audit log keeps what they did, with their name, but no longer points at the deleted account.
+                await _db.AuditLogs.Where(a => a.ActorUserId == userId).ExecuteUpdateAsync(s => s.SetProperty(a => a.ActorUserId, (int?)null));
+
+                _db.Users.Remove(user);
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            catch (DbUpdateException)
+            {
+                await transaction.RollbackAsync();
+                return ConflictMessage($"{name} has records in the system, so the account cannot be deleted. Keep it deactivated instead.");
+            }
+
+            // The picture file is no longer referenced by anything.
+            try
+            {
+                var full = string.IsNullOrWhiteSpace(picture) ? null : Path.GetFullPath(Path.Combine(_uploadsRoot, picture));
+                if (full != null && full.StartsWith(Path.GetFullPath(_uploadsRoot) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) && System.IO.File.Exists(full))
+                    System.IO.File.Delete(full);
+            }
+            catch (IOException)
+            {
+                // Harmless: nothing points at the file any more.
+            }
+
+            await _audit.LogAsync(CurrentUserId, "USER_DELETED", "User", userId, $"{name} ({email}) was deleted permanently");
+            return Ok(new { message = $"{name} was deleted permanently.", userId });
         }
 
         // POST api/admin/users/5/reset-password

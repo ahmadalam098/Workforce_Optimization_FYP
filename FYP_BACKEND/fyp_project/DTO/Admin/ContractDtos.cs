@@ -26,14 +26,6 @@ namespace fyp_project.DTOs.Admin
         [Range(0, 100000)] public decimal? ExtraHourlyRate { get; set; }
     }
 
-    public class CreateContractRequest : ContractTermsDto
-    {
-        [Range(1, int.MaxValue, ErrorMessage = "Select an organization.")]
-        public int OrganizationId { get; set; }
-
-        [StringLength(100)] public string? ContractNumber { get; set; }
-    }
-
     public class UpdateContractRequest : ContractTermsDto
     {
         [StringLength(100)] public string? ContractNumber { get; set; }
@@ -63,6 +55,9 @@ namespace fyp_project.DTOs.Admin
         public decimal? ExtraHourlyRate { get; set; }
         public string? BillingCurrency { get; set; }
         public DateTime? CreatedAt { get; set; }
+
+        /// <summary>The organization asked to change this approved contract and the admin has not decided yet.</summary>
+        public bool HasPendingChange { get; set; }
     }
 
     public class ContractVersionDto : ContractTermsDto

@@ -12,18 +12,21 @@ import { organizationsApi, salariesApi } from '../../../services/admin/adminServ
 import { formatCurrency, formatDate } from '../../../utils/format.js'
 import Notice from '../shared/Notice.jsx'
 import PageHeader from '../shared/PageHeader.jsx'
-import { SalaryFormModal, SalaryHistoryModal } from './SalaryModals.jsx'
+import { SalaryFormModal, SalaryHistoryModal, SalaryMonthsModal } from './SalaryModals.jsx'
 import { EmptyState, ErrorState } from '../shared/StateBox.jsx'
 import ViewButton from '../shared/ViewButton.jsx'
 
 const PAGE_SIZE = 10
+
+const THIS_YEAR = new Date().getFullYear()
+const YEAR_OPTIONS = [THIS_YEAR, THIS_YEAR - 1, THIS_YEAR - 2, THIS_YEAR - 3].map((value) => ({ value: String(value), label: String(value) }))
 
 const SALARY_OPTIONS = [
   { value: 'true', label: 'Salary set' },
   { value: 'false', label: 'No salary yet' },
 ]
 
-/** What each active employee is paid: monthly salary and overtime rate. */
+/** What each active employee is paid (monthly salary), and for the chosen year how many months were paid and how many are still to pay. */
 function SalariesPage() {
   const [search, setSearch] = useState('')
   const [organizationId, setOrganizationId] = useState('')
@@ -31,10 +34,12 @@ function SalariesPage() {
   const [page, setPage] = useState(1)
   const [formTarget, setFormTarget] = useState(null)
   const [historyTarget, setHistoryTarget] = useState(null)
+  const [monthsTarget, setMonthsTarget] = useState(null)
+  const [year, setYear] = useState(String(new Date().getFullYear()))
   const [notice, setNotice] = useState('')
 
   const debouncedSearch = useDebouncedValue(search)
-  const params = { search: debouncedSearch.trim(), organizationId, hasSalary, page, pageSize: PAGE_SIZE }
+  const params = { search: debouncedSearch.trim(), organizationId, hasSalary, year, page, pageSize: PAGE_SIZE }
   const { data, error, loading, reload } = useFetch((signal) => salariesApi.list(params, signal), JSON.stringify(params))
   const { data: organizations } = useFetch((signal) => organizationsApi.lookup(signal), 'organizations')
 
@@ -44,7 +49,7 @@ function SalariesPage() {
 
   return (
     <div className="page">
-      <PageHeader title="Salaries" description="Monthly salary and overtime rate of every active employee. Changes are dated and the history is kept." />
+      <PageHeader title="Salaries" description="Monthly salary of every active employee, and which months were paid and which are still to pay. Changes are dated and the history is kept." />
 
       <Notice message={notice} onClose={() => setNotice('')} />
 
@@ -62,6 +67,7 @@ function SalariesPage() {
             }}
           />
           <SelectField className="toolbar__filter" label="Organization" value={organizationId} onChange={(event) => { setOrganizationId(event.target.value); setPage(1) }} options={organizationOptions} placeholder="All organizations" />
+          <SelectField className="toolbar__filter" label="Year" value={year} onChange={(event) => { setYear(event.target.value); setPage(1) }} options={YEAR_OPTIONS} />
           <SelectField className="toolbar__filter" label="Salary" value={hasSalary} onChange={(event) => { setHasSalary(event.target.value); setPage(1) }} options={SALARY_OPTIONS} placeholder="All employees" />
         </div>
 
@@ -81,8 +87,9 @@ function SalariesPage() {
                     <th>Employee</th>
                     <th>Organization</th>
                     <th className="num">Monthly salary</th>
-                    <th className="num">Overtime / hour</th>
                     <th>Since</th>
+                    <th className="num">Months paid</th>
+                    <th className="num">Months to pay</th>
                     <th>View</th>
                     <th>
                       <span className="visually-hidden">Actions</span>
@@ -103,11 +110,9 @@ function SalariesPage() {
                       </td>
                       <td>{employee.organizationName || <span className="cell-muted">Central pool</span>}</td>
                       <td className="num">{employee.monthlySalary != null ? formatCurrency(employee.monthlySalary, employee.currency) : <Badge tone="warning">Not set</Badge>}</td>
-                      <td className="num">
-                        {employee.effectiveOvertimeRate != null ? formatCurrency(employee.effectiveOvertimeRate, employee.currency) : '—'}
-                        {employee.monthlySalary != null && employee.overtimeRate == null && <span className="person__sub">calculated</span>}
-                      </td>
                       <td className="cell-muted cell-date">{employee.effectiveFrom ? formatDate(employee.effectiveFrom) : '—'}</td>
+                      <td className="num">{employee.monthlySalary != null ? <Badge tone="success">{employee.paidMonths}</Badge> : '—'}</td>
+                      <td className="num">{employee.monthlySalary != null ? <Badge tone={employee.pendingMonths > 0 ? 'warning' : 'neutral'}>{employee.pendingMonths}</Badge> : '—'}</td>
                       <td>
                         <ViewButton to={`/admin/employees/${employee.employeeId}`} label={`View ${employee.fullName}`} />
                       </td>
@@ -115,6 +120,9 @@ function SalariesPage() {
                         <div className="row-actions">
                           <button type="button" className="icon-btn" onClick={() => setFormTarget(employee)} aria-label={`${employee.monthlySalary != null ? 'Change' : 'Set'} salary of ${employee.fullName}`} title={employee.monthlySalary != null ? 'Change salary' : 'Set salary'}>
                             <Icon name="edit" size={17} />
+                          </button>
+                          <button type="button" className="icon-btn" onClick={() => setMonthsTarget(employee)} aria-label={`Paid and unpaid months of ${employee.fullName}`} title="Month by month">
+                            <Icon name="chart" size={17} />
                           </button>
                           <button type="button" className="icon-btn" onClick={() => setHistoryTarget(employee)} aria-label={`Salary history of ${employee.fullName}`} title="History">
                             <Icon name="history" size={17} />
@@ -144,6 +152,7 @@ function SalariesPage() {
       )}
 
       {historyTarget && <SalaryHistoryModal employee={historyTarget} onClose={() => setHistoryTarget(null)} />}
+      {monthsTarget && <SalaryMonthsModal employee={monthsTarget} initialYear={year} onClose={() => setMonthsTarget(null)} />}
     </div>
   )
 }

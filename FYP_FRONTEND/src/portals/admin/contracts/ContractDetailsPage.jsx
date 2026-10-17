@@ -12,6 +12,8 @@ import { contractsApi, organizationsApi } from '../../../services/admin/adminSer
 import { formatDate, formatDateTime } from '../../../utils/format.js'
 import { formatTerm } from '../../../utils/contractFormat.js'
 import ContractFormModal from './ContractFormModal.jsx'
+import ContractChangesCard from './ContractChangesCard.jsx'
+import DailyStaffingCard from './DailyStaffingCard.jsx'
 import DecisionModal from '../shared/DecisionModal.jsx'
 import Notice from '../shared/Notice.jsx'
 import RuleFormModal from './RuleFormModal.jsx'
@@ -229,6 +231,18 @@ function ContractDetailsPage() {
               ))}
             </div>
           </section>
+
+          {isActive(contract.status) && (
+            <ContractChangesCard
+              contractId={contract.contractId}
+              onDone={(message) => {
+                setNotice(message)
+                reload()
+              }}
+            />
+          )}
+
+          {contract.terms.billingCycle === 'Daily' && isActive(contract.status) && <DailyStaffingCard contractId={contract.contractId} onNotice={setNotice} />}
 
           <section className="card" style={{ gridColumn: '1 / -1' }}>
             <div className="card__header">

@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace fyp_project.Controllers.Admin
 {
     /// <summary>
-    /// Admin portal: contracts (list, details, create, edit while pending), the approval workflow
+    /// Admin portal: contracts (list, details, edit), the approval workflow
     /// Pending -> Active / Rejected, Active -> Terminated, and the rules attached to a contract.
     /// </summary>
     [Route("api/admin/contracts")]
@@ -85,8 +85,12 @@ namespace fyp_project.Controllers.Admin
                 .GroupBy(v => v.ContractId)
                 .ToDictionary(g => g.Key, g => g.OrderByDescending(v => v.VersionNo).First());
 
+            var withChange = (await _db.ContractModificationRequests.AsNoTracking()
+                .Where(m => ids.Contains(m.ContractId) && m.Status == "Pending").Select(m => m.ContractId).Distinct().ToListAsync()).ToHashSet();
+
             foreach (var row in rows)
             {
+                row.HasPendingChange = withChange.Contains(row.ContractId);
                 if (latestVersions.TryGetValue(row.ContractId, out var version))
                 {
                     row.VersionNo = version.VersionNo;
@@ -188,68 +192,8 @@ namespace fyp_project.Controllers.Admin
             return Ok(detail);
         }
 
-        // POST api/admin/contracts   (creates a Pending contract, version 1)
-        [HttpPost]
-        public async Task<IActionResult> Create([FromBody] CreateContractRequest request)
-        {
-            var errors = ContractLogic.Validate(request);
-            if (errors.Count > 0) return ValidationErrors(errors);
-
-            var organization = await _db.Organizations.AsNoTracking().FirstOrDefaultAsync(o => o.OrgId == request.OrganizationId);
-            if (organization == null) return FieldError("organizationId", "The selected organization does not exist.");
-            if (!ContractLogic.IsActiveStatus(organization.Status))
-                return FieldError("organizationId", "Contracts can only be created for approved (active) organizations.");
-
-            using var _ = await _ids.LockAsync();
-
-            var number = ContractLogic.Clean(request.ContractNumber);
-            if (number != null && await _db.Contracts.AnyAsync(c => c.ContractNumber == number))
-                return FieldError("contractNumber", "This contract number is already used.");
-
-            await using var transaction = await _db.Database.BeginTransactionAsync();
-            try
-            {
-                var contract = new Contract
-                {
-                    ContractId = await _ids.NextAsync(_db, "Contract", "contract_id"),
-                    OrgId = request.OrganizationId,
-                    Status = ContractLogic.Pending,
-                    CreatedAt = DateTime.UtcNow,
-                };
-                contract.ContractNumber = number ?? $"CNT-{contract.ContractId:000}";
-                ContractLogic.MirrorToContract(request, contract);
-                _db.Contracts.Add(contract);
-                await _db.SaveChangesAsync();
-
-                var version = new ContractVersion
-                {
-                    ContractId = contract.ContractId,
-                    VersionNo = 1,
-                    ChangeSummary = "Original contract",
-                    CreatedBy = CurrentUserId,
-                    CreatedAt = DateTime.UtcNow,
-                };
-                ContractLogic.CopyToVersion(request, version);
-                _db.ContractVersions.Add(version);
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
-
-                await _audit.LogAsync(CurrentUserId, "CONTRACT_CREATED", "Contract", contract.ContractId,
-                    $"{contract.ContractNumber} for {organization.OrgName}");
-
-                return CreatedAtAction(nameof(Get), new { contractId = contract.ContractId }, new
-                {
-                    message = "Contract created and waiting for approval.",
-                    contractId = contract.ContractId,
-                    contractNumber = contract.ContractNumber,
-                });
-            }
-            catch (DbUpdateException)
-            {
-                await transaction.RollbackAsync();
-                throw;
-            }
-        }
+        // Contracts are not created by the admin: the organization asks for one (POST api/organization/contracts) and the admin reviews it here:
+        // edits it (Pending) to set the hourly rates, then approves or rejects it.
 
         // PUT api/admin/contracts/5   (Pending: edited in place. Active or Suspended: saved as a new version, the old one stays in the history)
         [HttpPut("{contractId:int}")]
@@ -344,6 +288,11 @@ namespace fyp_project.Controllers.Admin
 
             if (contract.Org == null || !ContractLogic.IsActiveStatus(contract.Org.Status))
                 return ConflictMessage("The organization must be approved (active) before its contract can be approved.");
+
+            // An organization asks for a contract without the prices: the admin sets the rates (Edit) before approving, because invoices are worked out from them.
+            var (terms, _) = await ContractLogic.GetCurrentTermsAsync(_db, contract);
+            if ((terms.BaseHourlyRate ?? 0) <= 0)
+                return ConflictMessage("Set the base hourly rate first (Edit this contract). Invoices are worked out from it.");
 
             contract.Status = ContractLogic.Active;
             contract.ApprovedAt = DateTime.UtcNow;

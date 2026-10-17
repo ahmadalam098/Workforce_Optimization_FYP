@@ -28,7 +28,7 @@ namespace fyp_project.Controllers
             _logger = logger;
         }
 
-        private static readonly string[] AllowedRoles = { "Admin", "Organization Manager" };
+        private static readonly string[] AllowedRoles = { "Admin", "Organization Manager", "Employee", "Business Owner" };
 
         [HttpPost("loginUser")]
         public async Task<IActionResult> Login([FromBody] Login obj)
@@ -143,7 +143,7 @@ namespace fyp_project.Controllers
                     });
                 }
 
-                // 7. Only the roles that have a portal can sign in (Admin and Organization Manager)
+                // 7. Only the roles that have a portal can sign in (Admin, Organization Manager, Employee and Business Owner)
                 if (!AllowedRoles.Contains(actualRole, StringComparer.OrdinalIgnoreCase))
                 {
                     return StatusCode(403, new

@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using fyp_project.Controllers;
 using fyp_project.DTO;
 using fyp_project.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -23,6 +24,17 @@ namespace fyp_project.Controllers.Admin
         [HttpGet("me")]
         public async Task<IActionResult> Me()
         {
+            // An organization signs in separately: its token has the role "Organization" and its own organization id.
+            var isOrganization = User.Claims.Any(c => (c.Type == ClaimTypes.Role || c.Type == "role") && c.Value == "Organization");
+            if (isOrganization)
+            {
+                var orgId = int.TryParse(User.FindFirst("org_id")?.Value, out var parsed) ? parsed : (int?)null;
+                var org = await _context.Organizations.AsNoTracking().FirstOrDefaultAsync(o => o.OrgId == orgId);
+                if (org == null || org.Status == "Rejected" || org.Status == "Suspended")
+                    return Unauthorized(new { message = "This organization can no longer sign in." });
+                return Ok(new { user = OrganizationPortal.OrganizationAuthController.ProfileOf(org) });
+            }
+
             var value = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                         ?? User.FindFirst("nameid")?.Value
                         ?? User.FindFirst("sub")?.Value;

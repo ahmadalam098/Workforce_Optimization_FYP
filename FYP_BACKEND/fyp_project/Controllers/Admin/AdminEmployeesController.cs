@@ -178,7 +178,7 @@ namespace fyp_project.Controllers.Admin
                 current.EffectiveTo = today.AddDays(-1);
                 _db.SalaryStructures.Add(new SalaryStructure
                 {
-                    EmpId = employeeId, MonthlySalary = amount, Currency = current.Currency, OvertimeRate = current.OvertimeRate,
+                    EmpId = employeeId, MonthlySalary = amount, Currency = current.Currency,
                     EffectiveFrom = today, CreatedBy = CurrentUserId, CreatedAt = DateTime.UtcNow,
                 });
             }

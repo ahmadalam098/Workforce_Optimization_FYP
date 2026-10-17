@@ -28,7 +28,6 @@ export const contractsApi = {
   /** params: { search, status, organizationId, page, pageSize } -> { items, total, page, pageSize } */
   list: (params, signal) => apiRequest('/api/admin/contracts', { params, signal }),
   get: (contractId, signal) => apiRequest(`/api/admin/contracts/${contractId}`, { signal }),
-  create: (body) => apiRequest('/api/admin/contracts', { method: 'POST', body }),
   update: (contractId, body) => apiRequest(`/api/admin/contracts/${contractId}`, { method: 'PUT', body }),
   approve: (contractId, reason) => apiRequest(`/api/admin/contracts/${contractId}/approve`, { method: 'POST', body: { reason } }),
   reject: (contractId, reason) => apiRequest(`/api/admin/contracts/${contractId}/reject`, { method: 'POST', body: { reason } }),
@@ -37,6 +36,29 @@ export const contractsApi = {
   updateRule: (contractId, ruleId, body) =>
     apiRequest(`/api/admin/contracts/${contractId}/rules/${ruleId}`, { method: 'PUT', body }),
   deleteRule: (contractId, ruleId) => apiRequest(`/api/admin/contracts/${contractId}/rules/${ruleId}`, { method: 'DELETE' }),
+}
+
+export const contractChangesApi = {
+  /**
+   * The changes organizations asked for in approved contracts. params: { contractId, status ('Pending' | 'Approved' | 'Rejected' | 'Withdrawn' | 'all', default Pending) } ->
+   * [{ modificationId, contractId, contractNumber, organizationName, status, comment, adminResponse, effectiveDate, createdAt, reviewedAt, appliedAt, scheduled, changes: [{ key, current, proposed }] }]
+   */
+  list: (params, signal) => apiRequest('/api/admin/contract-changes', { params, signal }),
+  /** Puts a new contract version in force (now, or on the day the organization asked for). */
+  approve: (modificationId, note) => apiRequest(`/api/admin/contract-changes/${modificationId}/approve`, { method: 'POST', body: { note } }),
+  /** The reason is required; the current contract keeps running. */
+  reject: (modificationId, note) => apiRequest(`/api/admin/contract-changes/${modificationId}/reject`, { method: 'POST', body: { note } }),
+}
+
+export const dailyStaffingApi = {
+  /**
+   * Where the daily contracts stand today: [{ contractId, contractNumber, orgId, orgName, min, max, window, state (Complete | Short | Waiting | WindowEnded | NotStarted |
+   * Finished | OrganizationInactive | NoWindow), appointed, atOrganizationNow, extra, stillShort, employees: [names], message }]. contractId is optional.
+   */
+  status: (contractId, signal) => apiRequest('/api/admin/daily-staffing', { params: { contractId: contractId || undefined }, signal }),
+  /** Appoints the missing minimum employees of every daily contract now -> { message, day, released, contracts } */
+  runAll: () => apiRequest('/api/admin/daily-staffing/run', { method: 'POST' }),
+  runOne: (contractId) => apiRequest(`/api/admin/daily-staffing/run/${contractId}`, { method: 'POST' }),
 }
 
 export const skillsApi = {
@@ -117,10 +139,12 @@ export const financeApi = {
 }
 
 export const salariesApi = {
-  /** params: { search, organizationId, hasSalary, page, pageSize } */
+  /** params: { search, organizationId, hasSalary, year, page, pageSize } - every item also has paidMonths and pendingMonths of that year */
   list: (params, signal) => apiRequest('/api/admin/salaries', { params, signal }),
+  /** Month by month for one employee: { year, years, currentSalary, history, months: [{ month, status, statusLabel, ... }], summary } */
+  months: (employeeId, year, signal) => apiRequest(`/api/admin/salaries/${employeeId}/months`, { params: { year: year || undefined }, signal }),
   history: (employeeId, signal) => apiRequest(`/api/admin/salaries/${employeeId}/history`, { signal }),
-  /** body: { monthlySalary, currency, overtimeRate, effectiveFrom, notes } */
+  /** body: { monthlySalary, currency, effectiveFrom, notes } */
   set: (employeeId, body) => apiRequest(`/api/admin/salaries/${employeeId}`, { method: 'POST', body }),
 }
 
@@ -201,6 +225,8 @@ export const usersApi = {
   list: (params, signal) => apiRequest('/api/admin/users', { params, signal }),
   create: (body) => apiRequest('/api/admin/users', { method: 'POST', body }),
   update: (userId, body) => apiRequest(`/api/admin/users/${userId}`, { method: 'PUT', body }),
+  /** Permanent delete of a deactivated Business Owner (409 with the reason otherwise). */
+  remove: (userId) => apiRequest(`/api/admin/users/${userId}`, { method: 'DELETE' }),
   setActive: (userId, isActive, reason) =>
     apiRequest(`/api/admin/users/${userId}/active`, { method: 'PATCH', body: { isActive, reason } }),
   resetPassword: (userId, newPassword) =>
@@ -224,6 +250,16 @@ export const workforceRequestsApi = {
   approve: (requestId, note) => apiRequest(`/api/admin/workforce-requests/${requestId}/approve`, { method: 'POST', body: { note } }),
   reject: (requestId, note) => apiRequest(`/api/admin/workforce-requests/${requestId}/reject`, { method: 'POST', body: { note } }),
   cancel: (requestId, note) => apiRequest(`/api/admin/workforce-requests/${requestId}/cancel`, { method: 'POST', body: { note } }),
+}
+
+export const reviewEscalationsApi = {
+  /** status: 'Pending' (default) | 'Decided' | 'all' -> [{ escalationId, reviewId, employeeId, employeeName, employeeActive, organizationName, rating, comment, managerNote, status, adminAction, adminResponse, createdAt, decidedAt }] */
+  list: (status, signal) => apiRequest('/api/admin/review-escalations', { params: { status }, signal }),
+  pendingCount: (signal) => apiRequest('/api/admin/review-escalations/pending-count', { signal }),
+  /** One request with the employee's other reviews and warnings. */
+  get: (escalationId, signal) => apiRequest(`/api/admin/review-escalations/${escalationId}`, { signal }),
+  /** body: { action ('Deactivate' | 'Warn' | 'Dismiss'), response (required) } - Deactivate releases the employee from every organization; they cannot sign in until activated. */
+  decide: (escalationId, body) => apiRequest(`/api/admin/review-escalations/${escalationId}/decide`, { method: 'POST', body }),
 }
 
 export const settingsApi = {

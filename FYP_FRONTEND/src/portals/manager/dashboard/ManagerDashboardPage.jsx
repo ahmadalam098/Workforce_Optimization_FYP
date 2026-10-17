@@ -81,7 +81,7 @@ function ManagerDashboardPage() {
         <StatCard label="My employees" value={data.employeesWorking} caption="Working for your organizations" icon="users" to="/manager/employee-pool?view=mine" />
         <StatCard label="Free in the pool" value={data.freeEmployees} caption="Can be assigned to you" icon="sparkles" to="/manager/employee-pool?view=free" />
         <StatCard label="Active contracts" value={data.activeContracts} caption="Contracts of your organizations" icon="file" />
-        <StatCard label="Pending requests" value={data.pendingRequests} caption="Staff requests waiting for the admin" icon="inbox" />
+        <StatCard label="Pending requests" value={data.pendingRequests} caption="Staff requests waiting for your decision" icon="inbox" />
         <StatCard label="Open queries" value={data.openQueries} caption="Not resolved yet" icon="alert" />
       </section>
 

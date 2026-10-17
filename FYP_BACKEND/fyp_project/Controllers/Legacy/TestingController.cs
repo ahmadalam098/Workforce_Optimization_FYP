@@ -17,6 +17,8 @@ namespace fyp_project.Controllers
             _context = context;
         }
 
+        // Only the admin creates accounts: nobody can register themselves.
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
         [HttpPost("addUser")]
         public IActionResult AddUser([FromBody] CreateUserDto dto)
         {

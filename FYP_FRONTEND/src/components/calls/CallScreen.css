@@ -1,0 +1,231 @@
+.call-outcome--Answered {
+  color: var(--success-text);
+}
+
+.call-outcome--Missed,
+.call-outcome--Declined {
+  color: var(--danger-text);
+}
+
+/* ---- the call window ---- */
+.call-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(7, 21, 40, 0.72);
+}
+
+.call-screen__panel {
+  width: min(32rem, 100%);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(180deg, var(--navy-800), var(--navy-950));
+  color: #fff;
+  padding: 1.75rem 1.5rem 1.5rem;
+  text-align: center;
+  box-shadow: var(--shadow-md);
+}
+
+.call-screen__demo {
+  display: inline-block;
+  margin-bottom: 1rem;
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+  background: var(--gold-500);
+  color: var(--navy-950);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.call-screen__video {
+  position: relative;
+  height: 13rem;
+  margin-bottom: 1.25rem;
+  border-radius: var(--radius-lg);
+  background: var(--navy-900);
+  border: 1px solid var(--navy-700);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.call-screen__video-note {
+  position: absolute;
+  left: 0.75rem;
+  bottom: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--navy-300);
+}
+
+.call-screen__self {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  width: 5rem;
+  height: 3.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--navy-700);
+  border: 1px solid var(--navy-600);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  color: var(--navy-200);
+}
+
+.call-screen__avatar {
+  width: 5rem;
+  height: 5rem;
+  margin: 0 auto 0.75rem;
+  border-radius: 50%;
+  background: var(--navy-700);
+  border: 2px solid var(--gold-500);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.call-screen__video .call-screen__avatar {
+  margin: 0;
+}
+
+.call-screen__name {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.call-screen__sub {
+  margin: 0.25rem 0 0;
+  color: var(--navy-200);
+  font-size: 0.9rem;
+}
+
+.call-screen__status {
+  margin: 1rem 0 1.25rem;
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--gold-300);
+}
+
+.call-screen__controls {
+  display: flex;
+  justify-content: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.call-control {
+  min-width: 6.5rem;
+  padding: 0.65rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--navy-600);
+  background: var(--navy-700);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.call-control:hover {
+  background: var(--navy-600);
+}
+
+.call-control.is-on {
+  background: var(--gold-500);
+  border-color: var(--gold-500);
+  color: var(--navy-950);
+}
+
+.call-control--hangup {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.call-control--hangup:hover {
+  background: var(--danger-text);
+}
+
+.call-control--accept {
+  background: var(--success);
+  border-color: var(--success);
+}
+
+.call-control--accept:hover {
+  background: var(--success-text);
+}
+
+.call-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 1.25rem;
+  transform: translateX(-50%);
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: min(36rem, calc(100vw - 2rem));
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  background: var(--navy-800, #12284a);
+  color: #fff;
+  box-shadow: var(--shadow-lg, 0 10px 30px rgba(0, 0, 0, 0.25));
+}
+
+.call-toast button {
+  background: none;
+  border: 0;
+  color: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.call-contacts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.call-contact {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border, #e3dccd);
+  border-radius: var(--radius-md);
+}
+
+.call-contact__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.call-contact__dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--gray-300, #c9c2b3);
+  display: inline-block;
+  margin-right: 0.35rem;
+}
+
+.call-contact__dot.is-online {
+  background: var(--success, #2e9e5b);
+}
+
+.call-contact__actions {
+  display: flex;
+  gap: 0.4rem;
+}

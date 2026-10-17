@@ -1,7 +1,7 @@
-// Performance monitoring is UI only for now. The communication between employees and organizations (audio, video, chat) does not exist
-// yet, so nothing is recorded. These are the "slots" the later work plugs into:
+// Performance monitoring shows the real audio / video calls (live and finished, with "Cut this call") of the manager's employees and
+// organizations. Chats, recordings, transcripts and quality scores do not exist yet. These are the "slots" the later work plugs into:
 //
-//   1. useMonitoredSessions() in useMonitoredSessions.js  - replace the empty list with the API call that returns the sessions.
+//   1. useMonitoredSessions() in useMonitoredSessions.js  - already returns the calls; add chats, recordings, transcript and score there.
 //   2. Each session is expected to look like:
 //        { sessionId, type: 'audio' | 'video' | 'chat', employeeId, employeeName, organizationId, organizationName,
 //          startedAt, durationSeconds, mediaUrl (audio/video file, null for chat), transcript: [{ at, speaker, text }],

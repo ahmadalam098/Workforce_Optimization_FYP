@@ -24,7 +24,7 @@ const PAGE_SIZE = 10
 
 const STATUS_OPTIONS = [
   { value: 'Unstaffed', label: 'Approved, still short of employees' },
-  { value: 'Pending', label: 'Waiting for the admin' },
+  { value: 'Pending', label: 'Waiting for your decision' },
   { value: 'Approved', label: 'Approved' },
   { value: 'Rejected', label: 'Rejected' },
   { value: 'Cancelled', label: 'Cancelled' },
@@ -61,7 +61,7 @@ function ManagerRequestsPage() {
     <div className="page">
       <PageHeader
         title="Staff Requests"
-        description="What your organizations asked for. Press Allocate to see the free employees in the pool and send the ones you choose to the organization (for example when the AI allocation is not available)."
+        description="The extra employees your organizations ask for come here, to you. Open a request to approve or reject it, then press Allocate to choose the employees from the free pool (until the AI allocation is available)."
         actions={
           <Button onClick={() => setCreating(true)} disabled={organizations.length === 0}>
             <Icon name="plus" size={18} /> New request
@@ -73,9 +73,9 @@ function ManagerRequestsPage() {
       {summary && (
         <section className="finance-tiles" aria-label="Overview">
           <article className="card finance-tile">
-            <p className="finance-tile__label">Waiting for the admin</p>
-            <p className="finance-tile__value">{summary.waitingForAdmin}</p>
-            <p className="finance-tile__caption">to be approved</p>
+            <p className="finance-tile__label">Waiting for you</p>
+            <p className="finance-tile__value">{summary.waiting}</p>
+            <p className="finance-tile__caption">approve or reject them</p>
           </article>
           <article className={`card finance-tile ${summary.approvedShort > 0 ? 'finance-tile--gold' : ''}`}>
             <p className="finance-tile__label">Approved, still short</p>

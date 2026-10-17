@@ -8,7 +8,7 @@ namespace fyp_project.Services
     public static class ContractLogic
     {
         public static readonly string[] Priorities = { "Low", "Medium", "High", "Critical" };
-        public static readonly string[] BillingCycles = { "Weekly", "Biweekly", "Monthly", "Quarterly" };
+        public static readonly string[] BillingCycles = { "Daily", "Weekly", "Biweekly", "Monthly", "Quarterly" };
         public static readonly string[] RuleCategories = { "Staffing", "Borrowing", "Payment", "Operational" };
 
         public const string Pending = "Pending";
@@ -40,7 +40,16 @@ namespace fyp_project.Services
                 errors["priorityLevel"] = "Priority must be Low, Medium, High or Critical.";
 
             if (!string.IsNullOrWhiteSpace(t.BillingCycle) && !BillingCycles.Contains(t.BillingCycle))
-                errors["billingCycle"] = "Billing cycle must be Weekly, Biweekly, Monthly or Quarterly.";
+                errors["billingCycle"] = "Billing cycle must be Daily, Weekly, Biweekly, Monthly or Quarterly.";
+
+            // A daily contract appoints its minimum employees every day, inside a daily window.
+            if (string.Equals(t.BillingCycle, "Daily", StringComparison.OrdinalIgnoreCase))
+            {
+                if ((t.MinEmployees ?? 0) < 1) errors["minEmployees"] = "A daily contract needs at least 1 minimum employee: that many are appointed every day.";
+                if (t.StartTime == null) errors["startTime"] = "A daily contract needs the daily start time.";
+                if (t.EndTime == null) errors["endTime"] = "A daily contract needs the daily end time.";
+                if (t.StartTime != null && t.EndTime != null && t.StartTime == t.EndTime) errors["endTime"] = "The daily end time must be different from the start time.";
+            }
 
             if (!string.IsNullOrWhiteSpace(t.BillingCurrency) &&
                 (t.BillingCurrency.Length != 3 || !t.BillingCurrency.All(char.IsLetter)))

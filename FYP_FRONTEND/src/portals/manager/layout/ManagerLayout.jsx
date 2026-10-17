@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import ErrorBoundary from '../../../components/ErrorBoundary.jsx'
+import CallProvider from '../../../components/calls/CallProvider.jsx'
 import Logo from '../../../components/brand/Logo.jsx'
 import Avatar from '../../../components/ui/Avatar.jsx'
 import Icon from '../../../components/ui/Icon.jsx'
@@ -13,7 +14,7 @@ import '../../admin/admin.css'
 import '../../admin/layout/AdminLayout.css'
 
 /** Navy sidebar + top bar shell for every Organization Manager page (same look as the Admin portal). */
-function ManagerLayout() {
+function ManagerLayoutShell() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -110,6 +111,15 @@ function ManagerLayout() {
         </main>
       </div>
     </div>
+  )
+}
+
+/** The portal shell, with the calls (incoming call, call screen, who is online) available on every page. */
+function ManagerLayout() {
+  return (
+    <CallProvider>
+      <ManagerLayoutShell />
+    </CallProvider>
   )
 }
 

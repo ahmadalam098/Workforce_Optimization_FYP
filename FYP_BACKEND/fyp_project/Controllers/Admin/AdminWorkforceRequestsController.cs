@@ -190,7 +190,7 @@ namespace fyp_project.Controllers.Admin
                 $"{organization.OrgName}: {request.RequiredEmployees} employee(s), {request.Priority}");
 
             var warnings = await WarningsAsync(organization.OrgId, contract, request.RequiredEmployees);
-            return Ok(new { message = "Staff request logged. It is waiting for your decision.", requestId, warnings });
+            return Ok(new { message = "Staff request logged. It is waiting for the organization manager's decision.", requestId, warnings });
         }
 
         // POST api/admin/workforce-requests/5/approve

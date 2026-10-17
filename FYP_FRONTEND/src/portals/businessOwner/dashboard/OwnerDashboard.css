@@ -1,0 +1,135 @@
+/* Business Owner dashboard: only what the shared dashboard styles do not have (the live indicator, the period row and the activity chart).
+   Colours come from the portal's theme (the same ones the Admin dashboard uses for its statuses). */
+.owner-period {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-end;
+  gap: 1rem;
+}
+
+.owner-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding-bottom: 0.7rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.owner-live__dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.owner-percent {
+  margin: 0.6rem 0 0;
+  font-weight: 700;
+  color: var(--navy-900);
+}
+
+.viz-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.1rem;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.viz-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.viz-legend__swatch {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 3px;
+}
+
+.viz-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.viz-toggle {
+  border: 0;
+  background: none;
+  color: var(--link);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0.2rem 0.1rem;
+}
+
+.viz-frame {
+  position: relative;
+}
+
+.viz-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.viz-svg text {
+  fill: var(--text-muted);
+  font-size: 11px;
+  font-family: inherit;
+}
+
+.viz-svg .viz-bar {
+  transition: y 0.45s ease, height 0.45s ease, opacity 0.15s ease;
+}
+
+.viz-tooltip {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  min-width: 9.5rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: var(--radius-sm);
+  background: var(--navy-900);
+  color: #fff;
+  font-size: 0.8rem;
+  box-shadow: var(--shadow-md);
+}
+
+.viz-tooltip strong {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.viz-tooltip__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.viz-tooltip__row span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .viz-svg .viz-bar {
+    transition: none;
+  }
+}
+
+/* Money in a stat card is text, so it is a little smaller than a plain number and may wrap instead of running out of the card. */
+.stat-card__value--text {
+  font-size: 1.45rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}

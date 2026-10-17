@@ -44,6 +44,7 @@ export const ADMIN_NAV_SECTIONS = [
     items: [
       { label: 'Queries', icon: 'inbox', to: '/admin/tickets', ready: true },
       { label: 'Reports', icon: 'chart', to: '/admin/reports', ready: true },
+      { label: 'Review Requests', icon: 'alert', to: '/admin/review-requests', ready: true },
       { label: 'Audit Logs', icon: 'shield', to: '/admin/audit-logs', ready: true },
     ],
   },

@@ -6,9 +6,10 @@ import Button from '../../../components/ui/Button.jsx'
 import Alert from '../../../components/ui/Alert.jsx'
 import Spinner from '../../../components/ui/Spinner.jsx'
 import { CURRENCY_OPTIONS } from '../../../constants/contracts.js'
+import Badge from '../../../components/ui/Badge.jsx'
 import { useFetch } from '../../../hooks/useFetch.js'
 import { salariesApi } from '../../../services/admin/adminService.js'
-import { formatCurrency, formatDate } from '../../../utils/format.js'
+import { formatCurrency, formatDate, formatMonth } from '../../../utils/format.js'
 import { onlyErrors, validateChoice, validateDate, validateNumber, validateText } from '../../../utils/validators.js'
 import { useFormFields } from '../../../hooks/useFormFields.js'
 
@@ -18,7 +19,6 @@ function validateSalary(form) {
   return onlyErrors({
     monthlySalary: validateNumber(form.monthlySalary, { label: 'Monthly salary', positive: true, max: 100000000, decimals: 2 }),
     currency: validateChoice(form.currency, CURRENCY_OPTIONS, 'Currency'),
-    overtimeRate: validateNumber(form.overtimeRate, { label: 'Overtime rate', required: false, min: 0, max: 1000000, decimals: 2 }),
     effectiveFrom: validateDate(form.effectiveFrom, { label: 'Start date' }),
     notes: validateText(form.notes, { label: 'Notes', required: false, max: 255 }),
   })
@@ -31,7 +31,6 @@ export function SalaryFormModal({ employee, onClose, onSaved }) {
     {
       monthlySalary: hasCurrent ? String(employee.monthlySalary) : '',
       currency: employee.currency || 'PKR',
-      overtimeRate: employee.overtimeRate != null ? String(employee.overtimeRate) : '',
       effectiveFrom: today(),
       notes: '',
     },
@@ -53,7 +52,6 @@ export function SalaryFormModal({ employee, onClose, onSaved }) {
       await salariesApi.set(employee.employeeId, {
         monthlySalary: Number(form.monthlySalary),
         currency: form.currency,
-        overtimeRate: form.overtimeRate === '' ? undefined : Number(form.overtimeRate),
         effectiveFrom: form.effectiveFrom,
         notes: form.notes.trim() || undefined,
       })
@@ -93,16 +91,6 @@ export function SalaryFormModal({ employee, onClose, onSaved }) {
         <div className="form-grid">
           <TextField label="Monthly salary" required type="number" inputMode="decimal" min="0" max="100000000" step="0.01" {...field('monthlySalary')} />
           <SelectField label="Currency" required options={CURRENCY_OPTIONS} {...field('currency')} />
-          <TextField
-            label="Overtime rate per hour (optional)"
-            type="number"
-            inputMode="decimal"
-            min="0"
-            max="1000000"
-            step="0.01"
-            hint="Leave empty to use salary ÷ working hours × the overtime multiplier (Payment Rules)."
-            {...field('overtimeRate')}
-          />
           <TextField label="Starts on" required type="date" {...field('effectiveFrom')} />
           <TextField label="Notes (optional)" className="form-grid__full" maxLength={255} autoComplete="off" {...field('notes')} />
         </div>
@@ -131,7 +119,6 @@ export function SalaryHistoryModal({ employee, onClose }) {
                 <th>From</th>
                 <th>To</th>
                 <th className="num">Salary</th>
-                <th className="num">Overtime / h</th>
                 <th>Set by</th>
               </tr>
             </thead>
@@ -141,10 +128,6 @@ export function SalaryHistoryModal({ employee, onClose }) {
                   <td className="cell-date">{formatDate(row.effectiveFrom)}</td>
                   <td className="cell-date">{row.effectiveTo ? formatDate(row.effectiveTo) : <strong>Current</strong>}</td>
                   <td className="num">{formatCurrency(row.monthlySalary, row.currency)}</td>
-                  <td className="num">
-                    {formatCurrency(row.effectiveOvertimeRate, row.currency)}
-                    {row.overtimeRate == null && <span className="person__sub">calculated</span>}
-                  </td>
                   <td className="cell-muted">
                     {row.createdBy || '—'}
                     {row.notes && <span className="person__sub">{row.notes}</span>}
@@ -153,6 +136,87 @@ export function SalaryHistoryModal({ employee, onClose }) {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+    </Modal>
+  )
+}
+
+const MONTH_TONES = { Paid: 'success', Approved: 'info', Draft: 'neutral', NotProcessed: 'warning', Upcoming: 'neutral', BeforeStart: 'neutral' }
+
+function totals(list) {
+  if (!list || list.length === 0) return '—'
+  return list.map((entry) => formatCurrency(entry.amount, entry.currency || 'PKR')).join(' + ')
+}
+
+/** Month by month for one employee: which months of the year were paid and which are still to be paid. */
+export function SalaryMonthsModal({ employee, initialYear, onClose }) {
+  const [year, setYear] = useState(initialYear ? String(initialYear) : '')
+  const { data, error, loading } = useFetch((signal) => salariesApi.months(employee.employeeId, year, signal), `salary-months-${employee.employeeId}-${year}`)
+  const yearOptions = (data?.years ?? []).map((value) => ({ value: String(value), label: String(value) }))
+
+  return (
+    <Modal title="Salary month by month" subtitle={employee.fullName} size="lg" onClose={onClose} footer={<Button variant="secondary" onClick={onClose}>Close</Button>}>
+      {error && !data ? (
+        <Alert type="error">{error.message}</Alert>
+      ) : !data && loading ? (
+        <Spinner label="Loading months..." />
+      ) : !data.currentSalary ? (
+        <p className="cell-muted">No salary has been set for this employee yet, so there is nothing to pay.</p>
+      ) : (
+        <div className="form-stack" aria-busy={loading}>
+          <div className="form-grid">
+            <SelectField label="Year" value={String(data.year)} onChange={(event) => setYear(event.target.value)} options={yearOptions} />
+            <div>
+              <p className="field__label">Monthly salary</p>
+              <p>
+                <strong>{formatCurrency(data.currentSalary.monthlySalary, data.currentSalary.currency)}</strong> <span className="cell-muted">since {formatDate(data.currentSalary.since)}</span>
+              </p>
+            </div>
+          </div>
+          <p>
+            <strong>Paid:</strong> {data.summary.paidMonths} {data.summary.paidMonths === 1 ? 'month' : 'months'} ({totals(data.summary.received)}) · <strong>Still to pay:</strong> {data.summary.pendingMonths}{' '}
+            {data.summary.pendingMonths === 1 ? 'month' : 'months'} ({totals(data.summary.pending)})
+          </p>
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th>Status</th>
+                  <th className="num">Salary</th>
+                  <th className="num">Overtime</th>
+                  <th className="num">Adjustment</th>
+                  <th className="num">Total</th>
+                  <th>Paid on</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.months.map((month) => {
+                  const faded = month.status === 'Upcoming' || month.status === 'BeforeStart'
+                  return (
+                    <tr key={month.month} className={faded ? 'is-inactive' : ''}>
+                      <td><strong>{formatMonth(data.year, month.month)}</strong></td>
+                      <td><Badge tone={MONTH_TONES[month.status] || 'neutral'}>{month.statusLabel}</Badge></td>
+                      <td className="num">{month.baseSalary != null ? formatCurrency(month.baseSalary, month.currency) : '—'}</td>
+                      <td className="num">{month.overtimeAmount ? formatCurrency(month.overtimeAmount, month.currency) : '—'}</td>
+                      <td className="num">{month.adjustment ? formatCurrency(month.adjustment, month.currency) : '—'}</td>
+                      <td className="num">
+                        {month.totalAmount != null ? (
+                          <strong>{formatCurrency(month.totalAmount, month.currency)}</strong>
+                        ) : month.expectedAmount != null && !faded ? (
+                          <span className="cell-muted">{formatCurrency(month.expectedAmount, month.currency)} due</span>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td className="cell-muted cell-date">{month.paidAt ? formatDate(month.paidAt) : '—'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </Modal>

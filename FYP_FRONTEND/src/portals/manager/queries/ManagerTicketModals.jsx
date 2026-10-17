@@ -7,7 +7,6 @@ import SelectField from '../../../components/ui/SelectField.jsx'
 import TextArea from '../../../components/ui/TextArea.jsx'
 import TextField from '../../../components/ui/TextField.jsx'
 import { TICKET_PRIORITY_OPTIONS, TICKET_TYPE_OPTIONS } from '../../../constants/support.js'
-import { useFetch } from '../../../hooks/useFetch.js'
 import { useFormFields } from '../../../hooks/useFormFields.js'
 import { managerTicketsApi } from '../../../services/manager/managerService.js'
 import { onlyErrors, validateChoice, validateText } from '../../../utils/validators.js'
@@ -92,10 +91,8 @@ export function SendToAdminModal({ ticket, onClose, onDone }) {
 }
 
 function validateTicket(form) {
-  const aboutEmployee = form.about === 'employee'
   return onlyErrors({
-    organizationId: aboutEmployee || form.organizationId ? '' : 'Select the organization.',
-    employeeId: aboutEmployee && !form.employeeId ? 'Select the employee.' : '',
+    organizationId: form.organizationId ? '' : 'Select the organization.',
     category: validateChoice(form.category, TICKET_TYPE_OPTIONS, 'Type'),
     subject: validateText(form.subject, { label: 'Subject', min: 5, max: 150 }),
     description: validateText(form.description, { label: 'Description', min: 10, max: 2000 }),
@@ -104,18 +101,11 @@ function validateTicket(form) {
   })
 }
 
-const ABOUT_OPTIONS = [
-  { value: 'organization', label: 'An organization' },
-  { value: 'employee', label: 'An employee' },
-]
-
-/** Log a query or complaint that one of the manager's organizations (or one of their employees) told them about. */
+/** Log a query or complaint that one of the manager's organizations told them about. (Employees send their own from the Employee portal.) */
 export function LogTicketModal({ organizations, onClose, onDone }) {
   const { form, field, setValue, checkAll, addServerErrors } = useFormFields(
     {
-      about: 'organization',
       organizationId: organizations.length === 1 ? String(organizations[0].organizationId) : '',
-      employeeId: '',
       category: 'Query',
       subject: '',
       description: '',
@@ -127,11 +117,7 @@ export function LogTicketModal({ organizations, onClose, onDone }) {
   )
   const [serverError, setServerError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const aboutEmployee = form.about === 'employee'
-
-  const { data: employees } = useFetch((signal) => managerTicketsApi.employees(signal), 'manager-ticket-employees')
   const organizationOptions = organizations.map((org) => ({ value: String(org.organizationId), label: org.name }))
-  const employeeOptions = (employees ?? []).map((employee) => ({ value: String(employee.employeeId), label: `${employee.fullName}${employee.orgName ? ` (${employee.orgName})` : ''}` }))
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -143,8 +129,7 @@ export function LogTicketModal({ organizations, onClose, onDone }) {
     setServerError('')
     try {
       const result = await managerTicketsApi.create({
-        organizationId: aboutEmployee ? undefined : Number(form.organizationId),
-        employeeId: aboutEmployee ? Number(form.employeeId) : undefined,
+        organizationId: Number(form.organizationId),
         category: form.category,
         subject: form.subject.trim(),
         description: form.description.trim(),
@@ -163,7 +148,7 @@ export function LogTicketModal({ organizations, onClose, onDone }) {
   return (
     <Modal
       title="Log a query or complaint"
-      subtitle="Write down what an organization or one of your employees told you, so it can be handled."
+      subtitle="Write down what an organization told you, so it can be handled."
       size="lg"
       onClose={onClose}
       busy={submitting}
@@ -180,14 +165,7 @@ export function LogTicketModal({ organizations, onClose, onDone }) {
     >
       <form id="log-ticket-form" onSubmit={handleSubmit} noValidate className="form-stack">
         {serverError && <Alert type="error">{serverError}</Alert>}
-        <div className="form-grid">
-          <SelectField label="It comes from" required options={ABOUT_OPTIONS} {...field('about')} />
-          {aboutEmployee ? (
-            <SelectField label="Employee" required options={employeeOptions} placeholder="Select an employee" hint="Employees working for your organizations." {...field('employeeId')} />
-          ) : (
-            <SelectField label="Organization" required options={organizationOptions} placeholder="Select an organization" {...field('organizationId')} />
-          )}
-        </div>
+        <SelectField label="Organization" required options={organizationOptions} placeholder="Select an organization" {...field('organizationId')} />
         <div className="form-grid">
           <SelectField label="Type" required options={TICKET_TYPE_OPTIONS} {...field('category')} />
           <SelectField label="Severity" required options={TICKET_PRIORITY_OPTIONS} hint="High and Critical are severe: send those to the admin." {...field('priority')} />

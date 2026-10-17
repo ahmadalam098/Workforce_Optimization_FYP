@@ -11,12 +11,18 @@ export const MANAGER_NAV_SECTIONS = [
       { label: 'Salary Status', icon: 'chart', to: '/manager/salaries', ready: true },
       { label: 'Performance Monitoring', icon: 'activity', to: '/manager/performance', ready: true },
       { label: 'My Organizations', icon: 'building', to: '/manager/organizations', ready: true },
+      { label: 'Minimum Staff', icon: 'users', to: '/manager/minimum-staff', ready: true },
       { label: 'Staff Requests', icon: 'inbox', to: '/manager/requests', ready: true },
+      { label: 'Assignment Offers', icon: 'send', to: '/manager/offers', ready: true },
+      { label: 'Employee Reviews', icon: 'activity', to: '/manager/reviews', ready: true },
     ],
   },
   {
     title: 'Communication',
-    items: [{ label: 'Chat', icon: 'send', to: '/manager/chat', ready: true }],
+    items: [
+      { label: 'Chat', icon: 'send', to: '/manager/chat', ready: true },
+      { label: 'Calls', icon: 'phone', to: '/manager/calls', ready: true },
+    ],
   },
   {
     title: 'Finance',

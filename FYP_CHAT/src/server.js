@@ -3,9 +3,10 @@ import { readFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Server } from 'socket.io'
-import { asManager, asOrganization, internalOrganizations } from './api.js'
-import { authenticateCookie, MANAGER_ROLE } from './auth.js'
+import { asManager, asOrganization, asSignedInOrganization, internalOrganizations } from './api.js'
+import { authenticateCookie, MANAGER_ROLE, ORGANIZATION_ROLE } from './auth.js'
 import { assertConfig, config } from './config.js'
+import { createCalls, employeeRoom } from './calls.js'
 
 assertConfig()
 
@@ -13,9 +14,10 @@ const here = dirname(fileURLToPath(import.meta.url))
 
 // ---------------------------------------------------------------- rooms
 // manager:{userId}          every open tab of one manager
-// org:{orgId}:{userId}      the organization side of one conversation (organization + manager)
+// org:{orgId}               every open tab of one organization (all of its managers' conversations)
 export const managerRoom = (userId) => `manager:${userId}`
-export const orgRoom = (orgId, userId) => `org:${orgId}:${userId}`
+export const orgRoom = (orgId) => `org:${orgId}`
+export { employeeRoom }
 
 function cleanBody(value) {
   if (typeof value !== 'string') return null
@@ -68,7 +70,19 @@ io.use((socket, next) => {
     return next()
   }
 
-  // Test page only: speak as an organization (the organization portal and its login do not exist yet).
+  // An employee (calls only: no chat with organizations).
+  if (manager.userId && manager.role.toLowerCase() === 'employee') {
+    socket.data = { kind: 'employee', userId: manager.userId, token: manager.token, expiresAt: manager.expiresAt }
+    return next()
+  }
+
+  // A signed-in organization: it can only talk to the managers linked to it (the API checks that on every message).
+  if (manager.orgId && manager.role.toLowerCase() === ORGANIZATION_ROLE.toLowerCase()) {
+    socket.data = { kind: 'organization', orgId: manager.orgId, token: manager.token, expiresAt: manager.expiresAt }
+    return next()
+  }
+
+  // Test page only: speak as an organization without signing in.
   const { devOrgId, devManagerUserId } = socket.handshake.auth ?? {}
   if (config.devTools && asId(devOrgId) && asId(devManagerUserId)) {
     socket.data = { kind: 'organization', orgId: devOrgId, userId: devManagerUserId }
@@ -86,7 +100,7 @@ function handler(socket, run) {
   return async (payload, ack) => {
     const reply = typeof ack === 'function' ? ack : () => {}
 
-    if (socket.data.kind === 'manager' && socket.data.expiresAt && Date.now() > socket.data.expiresAt) {
+    if (socket.data.token && socket.data.expiresAt && Date.now() > socket.data.expiresAt) {
       reply({ ok: false, error: 'Your session has expired. Please sign in again.', code: 'expired' })
       socket.disconnect(true)
       return
@@ -108,31 +122,42 @@ function handler(socket, run) {
   }
 }
 
+const calls = createCalls(io, { managerRoom, orgRoom })
+
 io.on('connection', (socket) => {
   const { kind, userId } = socket.data
 
   if (kind === 'manager') {
     socket.join(managerRoom(userId))
+  } else if (kind === 'employee') {
+    socket.join(employeeRoom(userId))
   } else {
-    socket.join(orgRoom(socket.data.orgId, userId))
+    socket.join(orgRoom(socket.data.orgId))
   }
+
+  // Audio / video calls and who is online (only for signed-in people).
+  calls.attach(socket, handler)
 
   // A message. Saved by the API first; only a saved message is delivered to the other side.
   socket.on(
     'chat:send',
-    handler(socket, async ({ orgId, body }) => {
+    handler(socket, async ({ orgId, managerUserId, body }) => {
       const text = cleanBody(body)
       if (!text) throw new Error(`Write a message of up to ${config.maxBodyLength} characters.`)
 
       if (kind === 'manager') {
         if (!asId(orgId)) throw new Error('Choose an organization.')
         const message = await asManager(socket.data.token).send(orgId, text)
-        io.to(managerRoom(userId)).to(orgRoom(orgId, userId)).emit('chat:message', message)
+        io.to(managerRoom(userId)).to(orgRoom(orgId)).emit('chat:message', message)
         return { message }
       }
 
-      const message = await asOrganization(socket.data.orgId, userId).send(text)
-      io.to(managerRoom(userId)).to(orgRoom(socket.data.orgId, userId)).emit('chat:message', message)
+      // A signed-in organization chooses the manager; the test page speaks to the one it was opened for.
+      const toManager = socket.data.token ? asId(managerUserId) : userId
+      if (!toManager) throw new Error('Choose a manager.')
+      if (kind !== 'organization') throw new Error('Not available.')
+      const message = socket.data.token ? await asSignedInOrganization(socket.data.token).send(toManager, text) : await asOrganization(socket.data.orgId, toManager).send(text)
+      io.to(managerRoom(toManager)).to(orgRoom(socket.data.orgId)).emit('chat:message', message)
       return { message }
     }),
   )
@@ -140,16 +165,19 @@ io.on('connection', (socket) => {
   // The conversation was opened: the other side's messages become read, and they are told (blue ticks).
   socket.on(
     'chat:read',
-    handler(socket, async ({ orgId }) => {
+    handler(socket, async ({ orgId, managerUserId }) => {
       if (kind === 'manager') {
         if (!asId(orgId)) throw new Error('Choose an organization.')
         const { marked } = await asManager(socket.data.token).markRead(orgId)
-        if (marked > 0) io.to(orgRoom(orgId, userId)).emit('chat:read', { orgId, by: 'Manager' })
+        if (marked > 0) io.to(orgRoom(orgId)).emit('chat:read', { orgId, managerUserId: userId, by: 'Manager' })
         return { marked }
       }
 
-      const { marked } = await asOrganization(socket.data.orgId, userId).markRead()
-      if (marked > 0) io.to(managerRoom(userId)).emit('chat:read', { orgId: socket.data.orgId, by: 'Organization' })
+      if (kind !== 'organization') throw new Error('Not available.')
+      const toManager = socket.data.token ? asId(managerUserId) : userId
+      if (!toManager) throw new Error('Choose a manager.')
+      const { marked } = socket.data.token ? await asSignedInOrganization(socket.data.token).markRead(toManager) : await asOrganization(socket.data.orgId, toManager).markRead()
+      if (marked > 0) io.to(managerRoom(toManager)).emit('chat:read', { orgId: socket.data.orgId, by: 'Organization' })
       return { marked }
     }),
   )
@@ -159,6 +187,7 @@ io.on('connection', (socket) => {
     'chat:history',
     handler(socket, async ({ before }) => {
       if (kind !== 'organization') throw new Error('Not available.')
+      if (socket.data.token) throw new Error('Not available.')
       return { messages: await asOrganization(socket.data.orgId, userId).history(before) }
     }),
   )

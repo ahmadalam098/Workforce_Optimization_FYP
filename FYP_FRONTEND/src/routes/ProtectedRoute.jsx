@@ -11,7 +11,8 @@ function ProtectedRoute({ roles }) {
   if (initializing) return <Spinner fullPage label="Checking your session..." />
 
   if (!user) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />
+    const login = location.pathname.startsWith('/organization') ? '/organization/login' : '/login'
+    return <Navigate to={login} replace state={{ from: location.pathname }} />
   }
 
   const allowed = roles.some((role) => role.toLowerCase() === user.roleName?.toLowerCase())

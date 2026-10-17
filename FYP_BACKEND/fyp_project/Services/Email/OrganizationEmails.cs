@@ -6,7 +6,7 @@ namespace fyp_project.Services
     public static class OrganizationEmails
     {
         /// <summary>Sent to the organization's email address when an admin registers it.</summary>
-        public static (string Subject, string Html) Registered(string organizationName, string email, bool approved, DateTime registeredAtUtc)
+        public static (string Subject, string Html) Registered(string organizationName, string email, bool approved, DateTime registeredAtUtc, bool selfRegistered = false)
         {
             var name = WebUtility.HtmlEncode(organizationName);
             var address = WebUtility.HtmlEncode(email);
@@ -20,7 +20,7 @@ namespace fyp_project.Services
   <div style=""background:#0b1f3a;color:#f2b705;padding:20px 24px;border-radius:10px 10px 0 0;font-size:20px;font-weight:600"">WorkForce Nexus</div>
   <div style=""border:1px solid #e3dccd;border-top:0;padding:24px;border-radius:0 0 10px 10px;line-height:1.6"">
     <p style=""margin-top:0"">Dear {name} team,</p>
-    <p><strong>{name}</strong> has been registered on <strong>WorkForce Nexus</strong> by our administrator.</p>
+    <p><strong>{name}</strong> {(selfRegistered ? "has registered on <strong>WorkForce Nexus</strong>." : "has been registered on <strong>WorkForce Nexus</strong> by our administrator.")}</p>
     <table style=""border-collapse:collapse;margin:16px 0"">
       <tr><td style=""padding:4px 16px 4px 0;color:#6b7280"">Organization</td><td>{name}</td></tr>
       <tr><td style=""padding:4px 16px 4px 0;color:#6b7280"">Registered email</td><td>{address}</td></tr>

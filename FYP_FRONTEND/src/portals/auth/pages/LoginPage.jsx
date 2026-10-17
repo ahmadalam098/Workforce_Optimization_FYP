@@ -121,7 +121,11 @@ function LoginPage() {
         </Button>
       </form>
 
-      <p className="auth-form__footer">Accounts are created by the system administrator.</p>
+      <p className="auth-form__footer">Staff accounts are created by the system administrator.</p>
+      <p className="auth-form__footer">
+        Are you an organization? <Link className="auth-form__link" to="/organization/login">Organization login</Link> ·{' '}
+        <Link className="auth-form__link" to="/organization/register">Register</Link>
+      </p>
     </>
   )
 }

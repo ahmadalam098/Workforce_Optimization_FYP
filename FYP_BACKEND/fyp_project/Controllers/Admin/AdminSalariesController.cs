@@ -6,24 +6,24 @@ using Microsoft.EntityFrameworkCore;
 
 namespace fyp_project.Controllers.Admin
 {
-    /// <summary>Admin portal: what each employee is paid (monthly salary and overtime rate). Changes are dated, history is kept.</summary>
+    /// <summary>Admin portal: what each employee is paid (monthly salary) and which months were paid or are still to be paid. Changes are dated, history is kept.</summary>
     [Route("api/admin/salaries")]
     public class AdminSalariesController : AdminControllerBase
     {
         private readonly WorkforceManagementDbContext _db;
-        private readonly PaymentRuleService _rules;
+        private readonly SalaryReportService _report;
         private readonly AuditService _audit;
 
-        public AdminSalariesController(WorkforceManagementDbContext db, PaymentRuleService rules, AuditService audit)
+        public AdminSalariesController(WorkforceManagementDbContext db, SalaryReportService report, AuditService audit)
         {
             _db = db;
-            _rules = rules;
+            _report = report;
             _audit = audit;
         }
 
-        // GET api/admin/salaries?search=&organizationId=&hasSalary=&page=1&pageSize=10   (active employees)
+        // GET api/admin/salaries?search=&organizationId=&hasSalary=&year=&page=1&pageSize=10   (active employees, with the months paid and unpaid in the year)
         [HttpGet]
-        public async Task<IActionResult> List(string? search, int? organizationId, bool? hasSalary, int page = 1, int pageSize = 10)
+        public async Task<IActionResult> List(string? search, int? organizationId, bool? hasSalary, int? year, int page = 1, int pageSize = 10)
         {
             (page, pageSize) = NormalizePaging(page, pageSize);
 
@@ -76,9 +76,15 @@ namespace fyp_project.Controllers.Admin
                 item.StructureId = structure.StructureId;
                 item.MonthlySalary = structure.MonthlySalary;
                 item.Currency = structure.Currency;
-                item.OvertimeRate = structure.OvertimeRate;
-                item.EffectiveOvertimeRate = await _rules.OvertimeRateAsync(structure);
                 item.EffectiveFrom = structure.EffectiveFrom;
+            }
+
+            var counts = await _report.CountsAsync(ids, year);
+            foreach (var item in items)
+            {
+                if (item.MonthlySalary == null || !counts.TryGetValue(item.EmployeeId, out var c)) continue;
+                item.PaidMonths = c.Paid;
+                item.PendingMonths = c.Pending;
             }
 
             return Ok(new PagedResult<SalaryListItemDto> { Items = items, Total = total, Page = page, PageSize = pageSize });
@@ -108,8 +114,6 @@ namespace fyp_project.Controllers.Admin
                     StructureId = row.StructureId,
                     MonthlySalary = row.MonthlySalary,
                     Currency = row.Currency,
-                    OvertimeRate = row.OvertimeRate,
-                    EffectiveOvertimeRate = await _rules.OvertimeRateAsync(row),
                     EffectiveFrom = row.EffectiveFrom,
                     EffectiveTo = row.EffectiveTo,
                     Notes = row.Notes,
@@ -119,6 +123,17 @@ namespace fyp_project.Controllers.Admin
             }
 
             return Ok(result);
+        }
+
+        // GET api/admin/salaries/5/months?year=   (month by month: paid, approved, being prepared, not processed - what is left to pay)
+        [HttpGet("{employeeId:int}/months")]
+        public async Task<IActionResult> Months(int employeeId, int? year)
+        {
+            var name = await _db.Employees.AsNoTracking().Where(e => e.EmpId == employeeId).Select(e => e.User!.Name).FirstOrDefaultAsync();
+            if (name == null && !await _db.Employees.AnyAsync(e => e.EmpId == employeeId)) return NotFoundMessage("Employee not found.");
+
+            var r = await _report.BuildAsync(employeeId, year, showDraftAmounts: true);
+            return Ok(new { employeeId, fullName = name, r.Year, r.Years, r.CurrentSalary, r.History, r.Months, r.Summary });
         }
 
         // POST api/admin/salaries/5   (sets a new salary; the current one ends the day before)
@@ -152,7 +167,6 @@ namespace fyp_project.Controllers.Admin
                 EmpId = employeeId,
                 MonthlySalary = Money.Round(request.MonthlySalary),
                 Currency = currency,
-                OvertimeRate = request.OvertimeRate.HasValue ? Money.Round(request.OvertimeRate.Value) : null,
                 EffectiveFrom = effectiveFrom,
                 Notes = ContractLogic.Clean(request.Notes),
                 CreatedBy = CurrentUserId,

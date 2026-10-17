@@ -140,9 +140,6 @@ function OrganizationDetailsPage() {
           )}
           {isActive(org.status) && (
             <>
-              <Button onClick={() => navigate(`/admin/contracts/new?organizationId=${org.organizationId}`)}>
-                <Icon name="plus" size={17} /> New contract
-              </Button>
               <Button variant="secondary" onClick={() => setDecision('suspend')}>
                 <Icon name="ban" size={17} /> Suspend
               </Button>

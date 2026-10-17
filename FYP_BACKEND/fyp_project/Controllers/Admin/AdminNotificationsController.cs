@@ -28,6 +28,9 @@ namespace fyp_project.Controllers.Admin
 
         /// <summary>A page to open, when the alert is not about an audited item (used by the manager bell).</summary>
         public string? Link { get; set; }
+
+        /// <summary>Identifies this alert; "Mark all as read" remembers it, and the alert counts again only when the key changes. Empty = the title.</summary>
+        public string? Key { get; set; }
     }
 
     public class NotificationFeedDto
