@@ -34,6 +34,9 @@ export const ADMIN_NAV_SECTIONS = [
     title: 'Finance',
     items: [
       { label: 'Invoices', icon: 'file', to: '/admin/invoices', ready: true },
+      { label: 'Payments', icon: 'chart', to: '/admin/payments', ready: true },
+      { label: 'Payment Notices', icon: 'inbox', to: '/admin/payment-submissions', ready: true },
+      { label: 'Statements', icon: 'file', to: '/admin/statements', ready: true },
       { label: 'Payroll', icon: 'users', to: '/admin/payroll', ready: true },
       { label: 'Salaries', icon: 'chart', to: '/admin/salaries', ready: true },
       { label: 'Payment Rules', icon: 'settings', to: '/admin/payment-rules', ready: true },

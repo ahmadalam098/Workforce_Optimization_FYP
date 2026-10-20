@@ -61,8 +61,20 @@ namespace fyp_project.Services
 
 
 
+        // Billing: the letterhead and wording of invoices, receipts, statements and payslips.
+        public const string CompanyName = "BILLING_COMPANY_NAME";
+        public const string CompanyAddress = "BILLING_COMPANY_ADDRESS";
+        public const string CompanyPhone = "BILLING_COMPANY_PHONE";
+        public const string CompanyEmail = "BILLING_COMPANY_EMAIL";
+        public const string CompanyRegistration = "BILLING_COMPANY_REGISTRATION";
+        public const string BankDetails = "BILLING_BANK_DETAILS";
+        public const string InvoiceTerms = "BILLING_INVOICE_TERMS";
+        public const string DocumentFooter = "BILLING_DOCUMENT_FOOTER";
+        public const string OnlinePayments = "PAYMENT_ONLINE_ENABLED";
+
         public const string General = "General";
         public const string Notifications = "Notifications";
+        public const string Billing = "Billing";
 
         public static readonly SettingDefinition[] All =
         {
@@ -88,8 +100,16 @@ namespace fyp_project.Services
             new(NotifyWorkforce, Notifications, "Alerts", "Workforce alerts", "Show employee, shift, skill, allocation and staff request activity in the bell.", SettingKind.Bool, "true"),
             new(NotifyContractExpiryDays, Notifications, "Alerts", "Contract expiry alert", "Warn in the bell when an active contract ends within this many days. 0 switches the alert off.", SettingKind.Int, "30", "days", 0, 365),
 
-
-
+            // ---- Billing (printed on every invoice, receipt, statement and payslip)
+            new(CompanyName, Billing, "Company on documents", "Company name", "The name printed at the top of invoices, receipts, statements and payslips.", SettingKind.Text, "WorkForce Nexus", Min: 2, Max: 80),
+            new(CompanyAddress, Billing, "Company on documents", "Address", "Printed under the company name.", SettingKind.Text, "", Min: 0, Max: 200),
+            new(CompanyPhone, Billing, "Company on documents", "Phone", "Printed under the company name.", SettingKind.Text, "", Min: 0, Max: 40),
+            new(CompanyEmail, Billing, "Company on documents", "Email", "Printed under the company name; also where organizations can write about a bill.", SettingKind.Text, "", Min: 0, Max: 100),
+            new(CompanyRegistration, Billing, "Company on documents", "Registration number", "The company's registration number, printed on documents (optional).", SettingKind.Text, "", Min: 0, Max: 40),
+            new(BankDetails, Billing, "How to pay", "Bank details", "Where organizations send their payment, for example: Bank name, account title, account number / IBAN. Printed on every invoice.", SettingKind.Text, "", Min: 0, Max: 300),
+            new(InvoiceTerms, Billing, "How to pay", "Payment terms", "A short note printed on invoices, for example: Please pay by the due date and quote the invoice number.", SettingKind.Text, "Please pay by the due date and quote the invoice number.", Min: 0, Max: 250),
+            new(OnlinePayments, Billing, "Online payment", "Allow paying online", "Organizations can pay an invoice through the payment gateway (a demo gateway for now: no real money moves). Switch off to accept only bank transfers and payment notices.", SettingKind.Bool, "true"),
+            new(DocumentFooter, Billing, "Footer", "Footer text", "The last line of every document.", SettingKind.Text, "Thank you for your business.", Min: 0, Max: 150),
         };
 
         public static SettingDefinition? Find(string key) => All.FirstOrDefault(s => s.Key == key);

@@ -13,6 +13,7 @@ import { emailSentence } from '../../../utils/emailNote.js'
 import { formatDate, formatCurrency, formatDateTime, humanize } from '../../../utils/format.js'
 import { formatTimeRange } from '../../../utils/contractFormat.js'
 import ChangeShiftModal from './ChangeShiftModal.jsx'
+import EmployeeBankCard from './EmployeeBankCard.jsx'
 import EmployeeFormModal from './EmployeeFormModal.jsx'
 import EmployeeSkillModal from './EmployeeSkillModal.jsx'
 import Notice from '../shared/Notice.jsx'
@@ -180,6 +181,8 @@ function EmployeeDetailsPage() {
           </div>
         </section>
       </div>
+
+      <EmployeeBankCard employeeId={employee.employeeId} />
 
       <section className="card">
         <div className="card__header">

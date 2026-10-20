@@ -6,7 +6,8 @@ import ConfirmDialog from '../../../components/ui/ConfirmDialog.jsx'
 import Icon from '../../../components/ui/Icon.jsx'
 import Spinner from '../../../components/ui/Spinner.jsx'
 import { useFetch } from '../../../hooks/useFetch.js'
-import { invoicesApi } from '../../../services/admin/adminService.js'
+import LinkButton from '../../../components/ui/LinkButton.jsx'
+import { billingMailApi, invoicesApi } from '../../../services/admin/adminService.js'
 import { formatCurrency, formatDate, formatDateTime } from '../../../utils/format.js'
 import AdjustmentLineModal from './AdjustmentLineModal.jsx'
 import DecisionModal from '../shared/DecisionModal.jsx'
@@ -82,6 +83,15 @@ function InvoiceDetailsPage() {
     done('Line removed.')
   }
 
+  async function sendMail(kind) {
+    try {
+      const result = await (kind === 'reminder' ? billingMailApi.reminder(invoice.invoiceId) : billingMailApi.invoice(invoice.invoiceId))
+      setNotice(result?.message || 'Done.')
+    } catch (problem) {
+      setNotice(problem.message)
+    }
+  }
+
   async function handleRecalculate() {
     const result = await invoicesApi.recalculate(invoice.invoiceId)
     setRecalculating(false)
@@ -113,6 +123,19 @@ function InvoiceDetailsPage() {
           </div>
         </div>
         <div className="hero-card__actions">
+          <LinkButton to={`/admin/documents/invoice/${invoice.invoiceId}`}>
+            <Icon name="file" size={17} /> Print / View
+          </LinkButton>
+          {!isDraft && invoice.status !== 'Cancelled' && (
+            <Button variant="secondary" onClick={() => sendMail('invoice')}>
+              Email invoice
+            </Button>
+          )}
+          {isIssued && invoice.balance > 0 && (
+            <Button variant="secondary" onClick={() => sendMail('reminder')}>
+              Send reminder
+            </Button>
+          )}
           {isDraft && (
             <Button onClick={() => setIssuing(true)}>
               <Icon name="checkCircle" size={17} /> Issue invoice
@@ -244,6 +267,7 @@ function InvoiceDetailsPage() {
                   <th>Method</th>
                   <th>Recorded by</th>
                   <th>Manager check</th>
+                  <th>Receipt</th>
                 </tr>
               </thead>
               <tbody>
@@ -259,6 +283,9 @@ function InvoiceDetailsPage() {
                     </td>
                     <td className="cell-muted">{payment.recordedBy || '—'}</td>
                     <td>{payment.verifiedAt ? <Badge tone="success">Verified</Badge> : <span className="cell-muted">Not yet</span>}</td>
+                    <td>
+                      <Link to={`/admin/documents/receipt/${payment.paymentId}`}>Receipt</Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -27,7 +27,11 @@ namespace fyp_project.Controllers.OrganizationPortal
         };
         private static readonly string[] RequestActions = { "WORKFORCE_REQUEST_APPROVED", "WORKFORCE_REQUEST_REJECTED" };
         private static readonly string[] AllocationActions = { "EMPLOYEE_ALLOCATED", "EMPLOYEE_REALLOCATED", "EMPLOYEE_RELEASED", "ALLOCATION_OVERRIDE" };
-        private static readonly string[] InvoiceActions = { "INVOICE_ISSUED", "INVOICE_CANCELLED", "INVOICE_PAYMENT_RECORDED" };
+        private static readonly string[] InvoiceActions =
+        {
+            "INVOICE_ISSUED", "INVOICE_CANCELLED", "INVOICE_PAYMENT_RECORDED", "INVOICE_REMINDER_SENT",
+            "PAYMENT_SUBMISSION_VERIFIED", "PAYMENT_SUBMISSION_REJECTED", "PAYMENT_SUBMISSION_APPROVED", "ONLINE_PAYMENT_FAILED",
+        };
 
         private static readonly Dictionary<string, string> Titles = new()
         {
@@ -51,6 +55,11 @@ namespace fyp_project.Controllers.OrganizationPortal
             ["INVOICE_ISSUED"] = "A new invoice was issued",
             ["INVOICE_CANCELLED"] = "An invoice was cancelled",
             ["INVOICE_PAYMENT_RECORDED"] = "A payment was recorded",
+            ["INVOICE_REMINDER_SENT"] = "Payment reminder",
+            ["PAYMENT_SUBMISSION_VERIFIED"] = "Your manager verified your payment",
+            ["PAYMENT_SUBMISSION_REJECTED"] = "Your payment notice was not accepted",
+            ["PAYMENT_SUBMISSION_APPROVED"] = "Your payment was approved",
+            ["ONLINE_PAYMENT_FAILED"] = "Your online payment did not go through",
         };
 
         private readonly WorkforceManagementDbContext _db;

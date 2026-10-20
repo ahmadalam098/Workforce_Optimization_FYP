@@ -25,7 +25,11 @@ namespace fyp_project.Controllers.Manager
             "EMPLOYEE_CREATED", "EMPLOYEE_UPDATED", "EMPLOYEE_ACTIVATED", "EMPLOYEE_DEACTIVATED", "EMPLOYEE_SKILL_ADDED", "EMPLOYEE_SKILL_UPDATED",
             "EMPLOYEE_SKILL_REMOVED", "SHIFT_ASSIGNED", "SHIFT_UNASSIGNED", "OVERTIME_RECORDED",
         };
-        private static readonly string[] InvoiceActions = { "INVOICE_ISSUED", "INVOICE_CANCELLED", "INVOICE_PAYMENT_RECORDED" };
+        private static readonly string[] InvoiceActions =
+        {
+            "INVOICE_ISSUED", "INVOICE_CANCELLED", "INVOICE_PAYMENT_RECORDED",
+            "PAYMENT_SUBMITTED", "PAYMENT_SUBMISSION_APPROVED", "PAYMENT_SUBMISSION_REJECTED", "PAYMENT_SUBMISSION_WITHDRAWN",
+        };
         private static readonly string[] TicketActions = { "TICKET_CREATED", "TICKET_RESOLVED", "TICKET_FORWARDED" };
         private static readonly string[] PayrollActions = { "PAYROLL_APPROVED", "PAYROLL_PAID" };
 
@@ -55,6 +59,10 @@ namespace fyp_project.Controllers.Manager
             ["OFFER_ACCEPTED"] = "An employee accepted an assignment",
             ["OFFER_DECLINED"] = "An employee declined an assignment",
             ["OFFER_FAILED"] = "An accepted assignment could not be made",
+            ["PAYMENT_SUBMITTED"] = "An organization says it paid",
+            ["PAYMENT_SUBMISSION_APPROVED"] = "A payment was approved",
+            ["PAYMENT_SUBMISSION_REJECTED"] = "A payment notice was rejected",
+            ["PAYMENT_SUBMISSION_WITHDRAWN"] = "A payment notice was withdrawn",
             ["EMPLOYEE_REVIEW_SUBMITTED"] = "New review of an employee",
             ["EMPLOYEE_REVIEW_DISMISSED"] = "Review handled",
             ["REVIEW_ESCALATED"] = "Review sent to the admin",
@@ -142,6 +150,20 @@ namespace fyp_project.Controllers.Manager
                         Link = "/manager/chat",
                     });
                 }
+            }
+
+            if (pref.Invoices)
+            {
+                var myOrgs = await _db.OrganizationManagers.AsNoTracking().Where(x => x.UserId == me && x.OrgId != null).Select(x => x.OrgId!.Value).ToListAsync();
+                var toVerify = await SafeQuery.IfSchemaMissing(() => _db.PaymentSubmissions.AsNoTracking().Where(s => myOrgs.Contains(s.OrgId) && s.Status == PaymentSubmission.Pending).Select(s => s.SubmissionId).ToListAsync(), null);
+                if (toVerify is { Count: > 0 })
+                    alerts.Add(new NotificationAlertDto
+                    {
+                        Key = $"payment-verify-{toVerify.Count}-{toVerify.Max()}",
+                        Title = $"{toVerify.Count} payment{(toVerify.Count == 1 ? string.Empty : "s")} to verify",
+                        Message = "Your organizations say they paid. Check the reference and the proof, then verify.",
+                        Link = "/manager/payment-submissions",
+                    });
             }
 
             var days = pref.Expiry ? pref.ExpiryDays ?? await SettingsReader.GetIntAsync(_db, SettingsCatalog.NotifyContractExpiryDays) : 0;

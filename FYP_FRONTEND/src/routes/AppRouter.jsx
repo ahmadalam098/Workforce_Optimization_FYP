@@ -1,3 +1,4 @@
+import { billingMailApi } from '../services/admin/adminService.js'
 import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { ROLES } from '../constants/roles.js'
@@ -40,6 +41,18 @@ const OrganizationTeamPage = lazy(() => import('../portals/organization/team/Org
 const ManagerCallsPage = lazy(() => import('../portals/manager/calls/ManagerCallsPage.jsx'))
 const ManagerOffersPage = lazy(() => import('../portals/manager/offers/ManagerOffersPage.jsx'))
 const EmployeeAssignmentsPage = lazy(() => import('../portals/employee/assignments/EmployeeAssignmentsPage.jsx'))
+const DocumentViewerPage = lazy(() => import('../components/documents/DocumentViewerPage.jsx'))
+const ProfitStatementPage = lazy(() => import('../components/documents/ProfitStatementPage.jsx'))
+const DemoCheckoutPage = lazy(() => import('../portals/common/DemoCheckoutPage.jsx'))
+const VerifyDocumentPage = lazy(() => import('../portals/common/VerifyDocumentPage.jsx'))
+const AdminPaymentsPage = lazy(() => import('../portals/admin/finance/PaymentsPage.jsx'))
+const AdminPaymentSubmissionsPage = lazy(() => import('../portals/admin/finance/PaymentSubmissionsPage.jsx'))
+const AdminStatementsPage = lazy(() => import('../portals/admin/finance/StatementsPage.jsx'))
+const ManagerPaymentNoticesPage = lazy(() => import('../portals/manager/billing/ManagerPaymentNoticesPage.jsx'))
+const ManagerReceivablesPage = lazy(() => import('../portals/manager/billing/ManagerReceivablesPage.jsx'))
+const ManagerStatementsPage = lazy(() => import('../portals/manager/billing/ManagerStatementsPage.jsx'))
+const OrganizationPaymentsPage = lazy(() => import('../portals/organization/billing/OrganizationPaymentsPage.jsx'))
+const OrganizationStatementsPage = lazy(() => import('../portals/organization/billing/OrganizationStatementsPage.jsx'))
 const OrganizationLoginPage = lazy(() => import('../portals/organization/auth/OrganizationLoginPage.jsx'))
 const OrganizationRegisterPage = lazy(() => import('../portals/organization/auth/OrganizationRegisterPage.jsx'))
 const OrganizationForgotPasswordPage = lazy(() => import('../portals/organization/auth/OrganizationForgotPasswordPage.jsx'))
@@ -151,6 +164,13 @@ function AppRouter() {
             <Route path="audit-logs" element={<AuditLogsPage />} />
             <Route path="reports" element={<ReportsPage />} />
             <Route path="review-requests" element={<ReviewRequestsPage />} />
+            <Route path="payments" element={<AdminPaymentsPage />} />
+            <Route path="payment-submissions" element={<AdminPaymentSubmissionsPage />} />
+            <Route path="statements" element={<AdminStatementsPage />} />
+            <Route path="documents/invoice/:id" element={<DocumentViewerPage kind="invoice" backTo={(id) => `/admin/invoices/${id}`} backLabel="Back to the invoice" emailAction={{ label: 'Email to the organization', run: (id) => billingMailApi.invoice(id) }} />} />
+            <Route path="documents/receipt/:id" element={<DocumentViewerPage kind="receipt" backTo={(id, doc) => (doc ? `/admin/invoices/${doc.invoice.invoiceId}` : '/admin/payments')} backLabel="Back to the invoice" emailAction={{ label: 'Email receipt', run: (id) => billingMailApi.receipt(id) }} />} />
+            <Route path="documents/payslip/:id" element={<DocumentViewerPage kind="payslip" backTo="/admin/payroll" backLabel="Back to Payroll" />} />
+            <Route path="documents/payroll/:id" element={<DocumentViewerPage kind="payroll" backTo={(id) => `/admin/payroll/${id}`} backLabel="Back to the payroll" />} />
             <Route path="requests" element={<StaffRequestsPage />} />
             <Route path="requests/:requestId" element={<StaffRequestDetailsPage />} />
             <Route path="settings" element={<SettingsPage />} />
@@ -177,6 +197,12 @@ function AppRouter() {
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<ManagerDashboardPage />} />
             <Route path="employee-pool" element={<ManagerEmployeePoolPage />} />
+            <Route path="payment-submissions" element={<ManagerPaymentNoticesPage />} />
+            <Route path="receivables" element={<ManagerReceivablesPage />} />
+            <Route path="statements" element={<ManagerStatementsPage />} />
+            <Route path="documents/invoice/:id" element={<DocumentViewerPage kind="invoice" backTo={(id) => `/manager/invoices/${id}`} backLabel="Back to the invoice" />} />
+            <Route path="documents/receipt/:id" element={<DocumentViewerPage kind="receipt" backTo={(id, doc) => (doc ? `/manager/invoices/${doc.invoice.invoiceId}` : '/manager/payments')} backLabel="Back to the invoice" />} />
+            <Route path="documents/payslip/:id" element={<DocumentViewerPage kind="payslip" backTo="/manager/salaries" backLabel="Back to Salary Status" />} />
             <Route path="reviews" element={<ManagerReviewsPage />} />
             <Route path="reviews/:reviewId" element={<ManagerReviewDetailsPage />} />
             <Route path="requests" element={<ManagerRequestsPage />} />
@@ -207,6 +233,7 @@ function AppRouter() {
             <Route path="salary" element={<EmployeeSalaryPage />} />
             <Route path="hours" element={<EmployeeHoursPage />} />
             <Route path="calls" element={<EmployeeCallsPage />} />
+            <Route path="documents/payslip/:id" element={<DocumentViewerPage kind="payslip" backTo="/employee/salary" backLabel="Back to My Salary" />} />
             <Route path="assignments" element={<EmployeeAssignmentsPage />} />
             <Route path="settings" element={<EmployeeSettingsPage />} />
             <Route path="queries" element={<EmployeeQueriesPage />} />
@@ -219,6 +246,7 @@ function AppRouter() {
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<OwnerDashboardPage />} />
             <Route path="employees" element={<OwnerEmployeesPage />} />
+            <Route path="statements" element={<ProfitStatementPage backTo="/owner/dashboard" backLabel="Back to the dashboard" />} />
             <Route path="settings" element={<OwnerSettingsPage />} />
           </Route>
         </Route>
@@ -235,6 +263,10 @@ function AppRouter() {
             <Route path="invoices" element={<OrganizationInvoicesPage />} />
             <Route path="invoices/:invoiceId" element={<OrganizationInvoiceDetailsPage />} />
             <Route path="reports" element={<OrganizationReportsPage />} />
+            <Route path="payments" element={<OrganizationPaymentsPage />} />
+            <Route path="statements" element={<OrganizationStatementsPage />} />
+            <Route path="documents/invoice/:id" element={<DocumentViewerPage kind="invoice" backTo={(id) => `/organization/invoices/${id}`} backLabel="Back to the invoice" />} />
+            <Route path="documents/receipt/:id" element={<DocumentViewerPage kind="receipt" backTo={(id, doc) => (doc ? `/organization/invoices/${doc.invoice.invoiceId}` : '/organization/payments')} backLabel="Back to the invoice" />} />
             <Route path="employees" element={<OrganizationEmployeesPage />} />
             <Route path="employees/:employeeId" element={<OrganizationEmployeeDetailsPage />} />
             <Route path="requests" element={<OrganizationRequestsPage />} />
@@ -242,6 +274,8 @@ function AppRouter() {
           </Route>
         </Route>
 
+        <Route path="/verify/:kind/:number" element={<VerifyDocumentPage />} />
+        <Route path="/pay/demo/:token" element={<DemoCheckoutPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Suspense>

@@ -8,6 +8,7 @@ import { useFetch } from '../../../hooks/useFetch.js'
 import { reportsApi } from '../../../services/admin/adminService.js'
 import { downloadCsv } from '../../../utils/csv.js'
 import { formatCurrency, formatCurrencyWhole, formatDate, formatMonth, humanize } from '../../../utils/format.js'
+import AdminReceivables from './AdminReceivables.jsx'
 import PageHeader from '../shared/PageHeader.jsx'
 import { EmptyState, ErrorState } from '../shared/StateBox.jsx'
 import '../finance/FinanceTiles.css'
@@ -17,6 +18,7 @@ const TABS = [
   { id: 'utilization', label: 'Utilization' },
   { id: 'allocations', label: 'Allocation' },
   { id: 'financial', label: 'Financial' },
+  { id: 'receivables', label: 'Receivables' },
 ]
 
 const pad = (value) => String(value).padStart(2, '0')
@@ -407,6 +409,7 @@ function ReportsPage() {
   }
 
   const Report = { utilization: UtilizationReport, allocations: AllocationReport, financial: FinancialReport }[tab]
+  const byDate = tab !== 'receivables'
 
   return (
     <div className="page">
@@ -420,6 +423,7 @@ function ReportsPage() {
         ))}
       </div>
 
+      {byDate && (
       <section className="card">
         <div className="toolbar">
           <div className="report-presets" role="group" aria-label="Period">
@@ -433,8 +437,11 @@ function ReportsPage() {
           <TextField className="toolbar__filter" label="To" type="date" value={range.to} onChange={editDate('to')} />
         </div>
       </section>
+      )}
 
-      {invalid || !range.from || !range.to ? (
+      {!byDate ? (
+        <AdminReceivables />
+      ) : invalid || !range.from || !range.to ? (
         <div className="card">
           <EmptyState icon="alert" title="Choose a valid period" text="Pick a start date that is not after the end date." />
         </div>

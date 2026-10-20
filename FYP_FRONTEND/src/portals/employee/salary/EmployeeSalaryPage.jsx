@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import Badge from '../../../components/ui/Badge.jsx'
 import Button from '../../../components/ui/Button.jsx'
 import Icon from '../../../components/ui/Icon.jsx'
@@ -140,6 +141,7 @@ function EmployeeSalaryPage() {
                     <th>Adjustment</th>
                     <th>Total</th>
                     <th>Paid on</th>
+                    <th>Salary slip</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -172,6 +174,7 @@ function EmployeeSalaryPage() {
                           )}
                         </td>
                         <td className="cell-muted">{month.paidAt ? formatDate(month.paidAt) : '—'}</td>
+                        <td>{month.payslipItemId ? <Link to={`/employee/documents/payslip/${month.payslipItemId}`}>View / print</Link> : <span className="cell-muted">—</span>}</td>
                       </tr>
                     )
                   })}

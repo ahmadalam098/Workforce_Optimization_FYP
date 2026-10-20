@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
-import Alert from '../../../components/ui/Alert.jsx'
 import Spinner from '../../../components/ui/Spinner.jsx'
 import CallContactList from '../../../components/calls/CallContactList.jsx'
+import ServeNowPanel from '../../../components/calls/ServeNowPanel.jsx'
 import CallHistory from '../../../components/calls/CallHistory.jsx'
 import { useCalls } from '../../../components/calls/callContext.js'
 import { useFetch } from '../../../hooks/useFetch.js'
@@ -11,7 +11,7 @@ import { ErrorState } from '../../admin/shared/StateBox.jsx'
 
 /**
  * Employee: voice and video calls with the organization you work for and with its manager. An organization can call you too (the call rings on
- * any page). The call screen is a dummy for now - no sound or picture - but the whole flow is real and WebRTC plugs in later.
+ * any page). Real WebRTC: the "Serving now" panel turns the video on towards each organization I am allocated to.
  */
 function EmployeeCallsPage() {
   const { me, tick } = useCalls()
@@ -26,7 +26,9 @@ function EmployeeCallsPage() {
   return (
     <div className="page">
       <PageHeader title="Calls" description="Call the organization you work for, or its manager, by voice or video. They can call you too." />
-      <Alert type="info">Calling is in preview: the calls ring and connect for real, but no sound or picture is sent yet. Real audio and video (WebRTC) will be added later.</Alert>
+      
+
+      <ServeNowPanel organizations={(contacts ?? []).filter((contact) => contact.type === 'Organization')} />
 
       <section className="card">
         <div className="card__header">

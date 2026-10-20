@@ -26,9 +26,9 @@ var redisOptions = new ConfigurationOptions
     User = builder.Configuration["Redis:User"],
     Password = builder.Configuration["Redis:Password"],
 
-    // Debug ke liye true rakho
-    // Agar connection fail hua to app startup par actual error milega
-    AbortOnConnectFail = true,
+    // false: Redis (cloud) na mile to bhi backend start ho jaye aur peeche connect karne ki koshish karta rahe.
+    // Jab tak Redis nahi milta, RedisService OTP ko memory mein rakhta hai (Services/Auth/RedisService.cs).
+    AbortOnConnectFail = false,
 
     ConnectTimeout = 10000,
     SyncTimeout = 10000
@@ -71,6 +71,13 @@ builder.Services.AddScoped<DailyStaffingService>();
 builder.Services.AddScoped<ContractModificationService>();
 builder.Services.AddHostedService<DailyStaffingWorker>();
 builder.Services.AddScoped<InvoiceService>();
+builder.Services.AddScoped<PaymentService>();
+builder.Services.AddScoped<DocumentService>();
+builder.Services.AddScoped<PaymentSubmissionService>();
+builder.Services.AddScoped<BillingMailService>();
+// The payment gateway behind "Pay online". Only the demo gateway exists; a real one is another IPaymentGateway (config Payments:Gateway).
+builder.Services.AddScoped<IPaymentGateway, DemoPaymentGateway>();
+builder.Services.AddScoped<OnlinePaymentService>();
 builder.Services.AddScoped<ReportService>();
 
 

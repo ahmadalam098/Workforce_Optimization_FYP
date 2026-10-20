@@ -6,6 +6,7 @@ import Icon from '../../../components/ui/Icon.jsx'
 import Spinner from '../../../components/ui/Spinner.jsx'
 import { useFetch } from '../../../hooks/useFetch.js'
 import { useFlashNotice } from '../../../hooks/useFlashNotice.js'
+import LinkButton from '../../../components/ui/LinkButton.jsx'
 import { managerBillingApi } from '../../../services/manager/managerService.js'
 import { formatCurrency, formatDate, formatDateTime } from '../../../utils/format.js'
 import '../../admin/finance/FinanceTiles.css'
@@ -67,6 +68,24 @@ function ManagerInvoiceDetailsPage() {
           </div>
         </div>
         <div className="hero-card__actions">
+          <LinkButton to={`/manager/documents/invoice/${invoice.invoiceId}`}>
+            <Icon name="file" size={17} /> Print / View
+          </LinkButton>
+          {invoice.status === 'Issued' && invoice.balance > 0 && (
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                try {
+                  const result = await managerBillingApi.reminder(invoice.invoiceId)
+                  setNotice(result?.message || 'Reminder sent.')
+                } catch (problem) {
+                  setNotice(problem.message)
+                }
+              }}
+            >
+              Remind the organization
+            </Button>
+          )}
           {invoice.canVerify && (
             <Button onClick={() => setVerifyInvoice(true)}>
               <Icon name="checkCircle" size={17} /> Verify invoice
@@ -167,6 +186,7 @@ function ManagerInvoiceDetailsPage() {
                   <th className="num">Amount</th>
                   <th>Method</th>
                   <th>Verification</th>
+                  <th>Receipt</th>
                   <th>
                     <span className="visually-hidden">Actions</span>
                   </th>
@@ -183,6 +203,9 @@ function ManagerInvoiceDetailsPage() {
                     </td>
                     <td>
                       <VerifiedBadge verifiedAt={payment.verifiedAt} verifiedBy={payment.verifiedBy} />
+                    </td>
+                    <td>
+                      <Link to={`/manager/documents/receipt/${payment.paymentId}`}>Receipt</Link>
                     </td>
                     <td>
                       <div className="row-actions">

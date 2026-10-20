@@ -2,8 +2,7 @@ import { asUser, markCallMissed } from './api.js'
 
 // Audio / video calls. The ASP.NET API decides who may call whom and keeps the call session; this file only carries the live part:
 // ringing, answering, ending, the manager cutting a call, who is online, and the WebRTC signalling messages (offer / answer / ICE), which are
-// relayed untouched. The media itself is not built yet - the browser shows a dummy call screen - so `call:signal` is the place where real
-// WebRTC will plug in without any change on the server.
+// relayed untouched (the sound and picture go directly between the browsers). A manager can also watch a live call of their employee.
 
 export const RING_MS = Number(process.env.CALL_RING_MS) || 45_000
 
@@ -44,7 +43,7 @@ export function createCalls(io, { managerRoom, orgRoom }) {
   }
 
   function remember(call, token, party) {
-    const entry = open.get(call.callId) ?? { call, timer: null, tokens: new Map() }
+    const entry = open.get(call.callId) ?? { call, timer: null, tokens: new Map(), watchers: new Map() }
     entry.call = call
     entry.tokens.set(keyOf(party), token)
     open.set(call.callId, entry)
@@ -133,6 +132,64 @@ export function createCalls(io, { managerRoom, orgRoom }) {
       }),
     )
 
+    // The manager watches a live call of their employee. The API says which calls are theirs (the monitor list); the employee's browser then
+    // sends what it sees and hears to the manager (a second WebRTC connection) through call:watch-signal below. The call itself is not touched.
+    socket.on(
+      'call:watch',
+      handler(socket, async ({ callId }) => {
+        if (me.type !== 'Manager') throw new Error('Only a manager can watch a call.')
+        const { live } = await api().monitor()
+        const call = live.find((item) => item.callId === callId)
+        if (!call || call.status !== 'Active') throw new Error('This call is not live (or not one of yours).')
+        const sender = [callParty(call, 'caller'), callParty(call, 'callee')].find((party) => party.type === 'Employee')
+        if (!sender) throw new Error('Only calls of your employees can be watched.')
+        if (!(online.get(keyOf(sender)) > 0)) throw new Error('The employee is not connected right now, so the call cannot be shown.')
+        const entry = open.get(call.callId) ?? remember(call, socket.data.token, me)
+        entry.watchers.set(key, me)
+        io.to(roomOf(sender)).emit('call:watch-request', { callId, watcher: { ...me, key } })
+        return { sender: { ...sender, key: keyOf(sender) } }
+      }),
+    )
+
+    socket.on(
+      'call:unwatch',
+      handler(socket, async ({ callId }) => {
+        const entry = open.get(callId)
+        if (!entry?.watchers.delete(key)) return {}
+        for (const side of ['caller', 'callee']) io.to(roomOf(callParty(entry.call, side))).emit('call:watch-stop', { callId, watcher: { ...me, key } })
+        return {}
+      }),
+    )
+
+    // Offer / answer / ICE between a watching manager and the employee being watched. Only registered watchers and the two people of the call.
+    socket.on(
+      'call:watch-signal',
+      handler(socket, async ({ callId, to, data }) => {
+        const entry = open.get(callId)
+        if (!entry || !to) throw new Error('This call is not being watched.')
+        const toKey = keyOf(to)
+        const parties = [callParty(entry.call, 'caller'), callParty(entry.call, 'callee')]
+        const allowed = me.type === 'Manager' ? entry.watchers.has(key) && parties.some((party) => keyOf(party) === toKey) : parties.some((party) => sameParty(party, me)) && entry.watchers.has(toKey)
+        if (!allowed) throw new Error('Not allowed.')
+        io.to(roomOf(to)).emit('call:watch-signal', { callId, from: { ...me, key }, data })
+        return {}
+      }, { unlimited: true }),
+    )
+
+    // Fallback picture for a watching manager when the direct connection cannot be made: the employee's browser sends small still pictures
+    // of both sides a few times a second. Only from a person of the call to a registered watcher.
+    socket.on(
+      'call:watch-frame',
+      handler(socket, async ({ callId, to, local, remote }) => {
+        const entry = open.get(callId)
+        if (!entry || !to || !entry.watchers.has(keyOf(to))) return {}
+        if (![callParty(entry.call, 'caller'), callParty(entry.call, 'callee')].some((party) => sameParty(party, me))) return {}
+        const picture = (value) => (typeof value === 'string' && value.startsWith('data:image/jpeg') && value.length < 400_000 ? value : null)
+        io.to(roomOf(to)).emit('call:watch-frame', { callId, local: picture(local), remote: picture(remote) })
+        return {}
+      }, { unlimited: true }),
+    )
+
     // WebRTC signalling (offer / answer / ICE candidates): passed to the other person as it is. Only the two people of an open call may use it.
     socket.on(
       'call:signal',
@@ -150,7 +207,7 @@ export function createCalls(io, { managerRoom, orgRoom }) {
         const other = sameParty(caller, me) ? callee : caller
         io.to(roomOf(other)).emit('call:signal', { callId, from: me, data })
         return {}
-      }),
+      }, { unlimited: true }),
     )
 
     socket.on('disconnect', async () => {

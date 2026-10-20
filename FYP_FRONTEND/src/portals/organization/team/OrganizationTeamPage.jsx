@@ -43,7 +43,7 @@ function OrganizationTeamPage() {
   return (
     <div className="page">
       <PageHeader title="Live Team" description="The employees working for you right now. A green dot means they are online; call them by voice or video." />
-      <Alert type="info">Calling is in preview: the calls ring and connect for real, but no sound or picture is sent yet. Real audio and video (WebRTC) will be added later.</Alert>
+      <Alert type="info">Calls use your camera and microphone (allow them when the browser asks). Employees allocated to you turn their video on from their Calls page; you can also call them or your manager.</Alert>
 
       <section className="card">
         <div className="card__header">

@@ -1,17 +1,28 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import Button from '../../../components/ui/Button.jsx'
+import LinkButton from '../../../components/ui/LinkButton.jsx'
 import Icon from '../../../components/ui/Icon.jsx'
 import Spinner from '../../../components/ui/Spinner.jsx'
 import { useFetch } from '../../../hooks/useFetch.js'
-import { organizationBillingApi } from '../../../services/organization/organizationService.js'
+import { organizationBillingApi, organizationPaymentsApi } from '../../../services/organization/organizationService.js'
 import { formatCurrency, formatDate, formatDateTime } from '../../../utils/format.js'
 import '../../admin/finance/FinanceTiles.css'
+import Notice from '../../admin/shared/Notice.jsx'
 import { EmptyState, ErrorState } from '../../admin/shared/StateBox.jsx'
+import { PayInvoiceModal } from './OrganizationPaymentsPage.jsx'
+import PayOnlineModal from './PayOnlineModal.jsx'
 import WorkflowBadge from '../../admin/shared/WorkflowBadge.jsx'
 
 /** Organization: one invoice with its lines and the payments received. Read only. */
 function OrganizationInvoiceDetailsPage() {
   const { invoiceId } = useParams()
+  const [paying, setPaying] = useState(false)
+  const [payingOnline, setPayingOnline] = useState(false)
+  const [notice, setNotice] = useState('')
   const { data: invoice, error, loading, reload } = useFetch((signal) => organizationBillingApi.invoice(invoiceId, signal), `organization-invoice-${invoiceId}`)
+  const { data: options } = useFetch((signal) => organizationPaymentsApi.onlineOptions(signal), 'organization-online-options')
+  const { data: payable, reload: reloadPayable } = useFetch((signal) => organizationPaymentsApi.payable(signal), 'organization-payable')
 
   const back = (
     <Link className="back-link" to="/organization/invoices">
@@ -30,10 +41,12 @@ function OrganizationInvoiceDetailsPage() {
     )
   }
   const currency = invoice.currency
+  const toPay = (payable ?? []).find((item) => item.invoiceId === invoice.invoiceId)
 
   return (
     <div className="page">
       {back}
+      <Notice message={notice} onClose={() => setNotice('')} />
       <section className="card hero-card">
         <div className="hero-card__main">
           <h2 className="hero-card__title">{invoice.invoiceNumber || `Invoice #${invoice.invoiceId}`}</h2>
@@ -46,6 +59,21 @@ function OrganizationInvoiceDetailsPage() {
             {invoice.issueDate && <span className="cell-muted">Issued {formatDate(invoice.issueDate)}</span>}
             {invoice.dueDate && <span className="cell-muted">· due {formatDate(invoice.dueDate)}</span>}
           </div>
+        </div>
+        <div className="hero-card__actions">
+          <LinkButton to={`/organization/documents/invoice/${invoice.invoiceId}`}>
+            <Icon name="file" size={17} /> Print / View
+          </LinkButton>
+          {toPay && options?.enabled && (
+            <Button onClick={() => setPayingOnline(true)}>
+              <Icon name="checkCircle" size={17} /> Pay online
+            </Button>
+          )}
+          {toPay && (
+            <Button variant="secondary" onClick={() => setPaying(true)}>
+              <Icon name="plus" size={17} /> I paid another way
+            </Button>
+          )}
         </div>
       </section>
 
@@ -139,6 +167,7 @@ function OrganizationInvoiceDetailsPage() {
                   <th>Received</th>
                   <th className="num">Amount</th>
                   <th>Method</th>
+                  <th>Receipt</th>
                 </tr>
               </thead>
               <tbody>
@@ -150,6 +179,9 @@ function OrganizationInvoiceDetailsPage() {
                       {payment.method || '—'}
                       {payment.reference && <span className="person__sub">{payment.reference}</span>}
                     </td>
+                    <td>
+                      <Link to={`/organization/documents/receipt/${payment.paymentId}`}>Receipt</Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -157,6 +189,21 @@ function OrganizationInvoiceDetailsPage() {
           </div>
         )}
       </section>
+      {payingOnline && toPay && <PayOnlineModal invoice={toPay} demo={options?.demo} onClose={() => setPayingOnline(false)} />}
+
+      {paying && toPay && (
+        <PayInvoiceModal
+          payable={payable}
+          invoice={toPay}
+          onClose={() => setPaying(false)}
+          onDone={(message) => {
+            setPaying(false)
+            setNotice(message)
+            reload()
+            reloadPayable()
+          }}
+        />
+      )}
     </div>
   )
 }

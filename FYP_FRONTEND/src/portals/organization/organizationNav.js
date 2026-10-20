@@ -10,7 +10,11 @@ export const ORGANIZATION_NAV_SECTIONS = [
   },
   {
     title: 'Finance',
-    items: [{ label: 'Invoices', icon: 'file', to: '/organization/invoices', ready: true }],
+    items: [
+      { label: 'Invoices', icon: 'file', to: '/organization/invoices', ready: true },
+      { label: 'Payments', icon: 'chart', to: '/organization/payments', ready: true },
+      { label: 'Statements', icon: 'file', to: '/organization/statements', ready: true },
+    ],
   },
   {
     title: 'Insights',

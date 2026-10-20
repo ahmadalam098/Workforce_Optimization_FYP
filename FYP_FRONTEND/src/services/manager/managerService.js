@@ -93,7 +93,23 @@ export const managerMinimumStaffingApi = {
   release: (allocationId) => apiRequest(`/api/manager/minimum-staffing/release/${allocationId}`, { method: 'POST' }),
 }
 
+export const managerSubmissionsApi = {
+  /** Payments your organizations say they made. status: 'Pending' | 'Verified' | 'Approved' | 'Rejected' | 'Withdrawn' (empty = all) */
+  list: (status, signal) => apiRequest('/api/manager/billing/submissions', { params: { status }, signal }),
+  pendingCount: (signal) => apiRequest('/api/manager/billing/submissions/pending-count', { signal }),
+  /** You checked it; the admin approves next. */
+  verify: (submissionId) => apiRequest(`/api/manager/billing/submissions/${submissionId}/verify`, { method: 'POST' }),
+  reject: (submissionId, reason) => apiRequest(`/api/manager/billing/submissions/${submissionId}/reject`, { method: 'POST', body: { reason } }),
+}
+
+export const managerReceivablesApi = {
+  /** What your organizations still owe, by how late: the same shape as the admin's report. */
+  get: (params, signal) => apiRequest('/api/manager/billing/receivables', { params, signal }),
+}
+
 export const managerBillingApi = {
+  /** Emails the organization a reminder about an invoice that is not paid yet. */
+  reminder: (invoiceId) => apiRequest(`/api/manager/billing/invoices/${invoiceId}/reminder`, { method: 'POST' }),
   /** { currencies: [{ currency, invoiced, paid, outstanding, overdueInvoices }], invoiceCount, unverifiedInvoices, unverifiedPayments } */
   summary: (signal) => apiRequest('/api/manager/billing/summary', { signal }),
   /** params: { search, status, organizationId, verified, page, pageSize } -> { items, total, page, pageSize } (drafts are never listed) */

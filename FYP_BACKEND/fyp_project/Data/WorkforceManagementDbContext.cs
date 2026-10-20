@@ -67,6 +67,12 @@ public partial class WorkforceManagementDbContext : DbContext
 
     public virtual DbSet<AssignmentOffer> AssignmentOffers { get; set; }
 
+    public virtual DbSet<PaymentSubmission> PaymentSubmissions { get; set; }
+
+    public virtual DbSet<EmployeeBank> EmployeeBanks { get; set; }
+
+    public virtual DbSet<OnlinePayment> OnlinePayments { get; set; }
+
     public virtual DbSet<CallSession> CallSessions { get; set; }
 
     public virtual DbSet<NotificationState> NotificationStates { get; set; }

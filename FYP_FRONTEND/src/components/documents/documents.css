@@ -1,0 +1,490 @@
+/* Printable documents (invoice, receipt, statement, payslip ...). The screen shows a paper sheet; printing shows only the sheet. */
+
+.doc-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 0.75rem;
+}
+
+.doc-toolbar__spacer {
+  flex: 1;
+}
+
+.doc-switch {
+  display: inline-flex;
+  border: 1px solid var(--border, #e3dccd);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface, #fff);
+}
+
+.doc-switch button {
+  border: 0;
+  background: none;
+  padding: 0.5rem 0.9rem;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text-muted, #5b6679);
+  cursor: pointer;
+}
+
+.doc-switch button.is-active {
+  background: var(--navy-900, #0b1f3a);
+  color: var(--gold-400, #f2b705);
+}
+
+.doc-stage {
+  display: flex;
+  justify-content: center;
+  padding: 1.25rem 0 2rem;
+  overflow-x: auto;
+}
+
+/* ---- the paper ---- */
+.doc-sheet {
+  box-sizing: border-box;
+  width: 210mm;
+  max-width: 100%;
+  min-height: 140mm;
+  padding: 14mm 14mm 12mm;
+  background: #fff;
+  color: #16233a;
+  font-size: 13px;
+  line-height: 1.45;
+  border-radius: 6px;
+  box-shadow: 0 8px 30px rgba(11, 31, 58, 0.14);
+  position: relative;
+}
+
+.doc-sheet--slip {
+  width: 80mm;
+  min-height: 0;
+  padding: 5mm 4mm 6mm;
+  font-family: 'Courier New', ui-monospace, monospace;
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.doc-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 3px solid var(--gold-500, #f2b705);
+  margin-bottom: 1rem;
+}
+
+.doc-head__company {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0b1f3a;
+  letter-spacing: 0.01em;
+}
+
+.doc-head__line {
+  margin: 0.1rem 0 0;
+  color: #5b6679;
+  font-size: 0.85rem;
+}
+
+.doc-head__title {
+  text-align: right;
+}
+
+.doc-head__title h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #0b1f3a;
+}
+
+.doc-head__title p {
+  margin: 0.15rem 0 0;
+  font-weight: 600;
+}
+
+.doc-sheet--slip .doc-head {
+  display: block;
+  text-align: center;
+  border-bottom: 1px dashed #16233a;
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.doc-sheet--slip .doc-head__company {
+  font-size: 1.1rem;
+}
+
+.doc-sheet--slip .doc-head__title {
+  text-align: center;
+  margin-top: 0.4rem;
+}
+
+.doc-sheet--slip .doc-head__title h2 {
+  font-size: 0.95rem;
+  letter-spacing: 0.1em;
+}
+
+.doc-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem 2rem;
+  margin-bottom: 1rem;
+}
+
+.doc-sheet--slip .doc-grid {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.doc-label {
+  margin: 0 0 0.15rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #7a8396;
+}
+
+.doc-sheet--slip .doc-label::after {
+  content: ': ';
+}
+
+.doc-sheet--slip .doc-label {
+  display: inline;
+  margin: 0;
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: inherit;
+  color: inherit;
+}
+
+.doc-facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 1rem;
+}
+
+.doc-facts dt {
+  color: #7a8396;
+}
+
+.doc-facts dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.doc-sheet--slip .doc-facts {
+  display: block;
+}
+
+.doc-sheet--slip .doc-facts dt,
+.doc-sheet--slip .doc-facts dd {
+  display: inline;
+  color: inherit;
+  font-weight: normal;
+}
+
+.doc-sheet--slip .doc-facts dd::after {
+  content: '';
+  display: block;
+}
+
+.doc-sheet--slip .doc-facts dt::after {
+  content: ': ';
+}
+
+.doc-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.5rem 0 1rem;
+}
+
+.doc-table th {
+  text-align: left;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #0b1f3a;
+  padding: 0.45rem 0.5rem;
+  border-top: 1px solid #0b1f3a;
+  border-bottom: 1px solid #0b1f3a;
+  background: #f6f1e4;
+}
+
+.doc-table td {
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid #ebe5d6;
+  vertical-align: top;
+}
+
+.doc-table .num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.doc-table tfoot td {
+  border-bottom: 0;
+  font-weight: 600;
+}
+
+.doc-table tr.is-strong td {
+  font-weight: 700;
+  border-top: 1px solid #0b1f3a;
+}
+
+.doc-sheet--slip .doc-table th {
+  background: none;
+  border-top: 1px dashed #16233a;
+  border-bottom: 1px dashed #16233a;
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 0.2rem 0.15rem;
+}
+
+.doc-sheet--slip .doc-table td {
+  border-bottom: 0;
+  padding: 0.15rem;
+}
+
+.doc-totals {
+  margin-left: auto;
+  width: min(100%, 22rem);
+}
+
+.doc-totals div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.25rem 0;
+}
+
+.doc-totals .is-total {
+  border-top: 2px solid #0b1f3a;
+  margin-top: 0.25rem;
+  padding-top: 0.5rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.doc-sheet--slip .doc-totals {
+  width: 100%;
+  border-top: 1px dashed #16233a;
+  margin-top: 0.3rem;
+  padding-top: 0.3rem;
+}
+
+.doc-words {
+  margin: 0.75rem 0;
+  padding: 0.5rem 0.75rem;
+  background: #f6f1e4;
+  border-left: 3px solid var(--gold-500, #f2b705);
+  font-style: italic;
+}
+
+.doc-sheet--slip .doc-words {
+  background: none;
+  border: 0;
+  border-top: 1px dashed #16233a;
+  padding: 0.3rem 0;
+  margin: 0.3rem 0;
+}
+
+.doc-note {
+  margin: 0.75rem 0 0;
+  color: #3d4a60;
+}
+
+.doc-pay {
+  margin-top: 1rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #ebe5d6;
+  border-radius: 6px;
+  white-space: pre-line;
+}
+
+.doc-sheet--slip .doc-pay {
+  border: 0;
+  border-top: 1px dashed #16233a;
+  border-radius: 0;
+  padding: 0.3rem 0;
+}
+
+.doc-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1rem;
+  margin-top: 1.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #ebe5d6;
+}
+
+.doc-sheet--slip .doc-bottom {
+  display: block;
+  text-align: center;
+  border-top: 1px dashed #16233a;
+}
+
+.doc-qr {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.72rem;
+  color: #5b6679;
+}
+
+.doc-sheet--slip .doc-qr {
+  flex-direction: column;
+  justify-content: center;
+  color: inherit;
+}
+
+.doc-qr img {
+  width: 24mm;
+  height: 24mm;
+}
+
+.doc-sheet--slip .doc-qr img {
+  width: 28mm;
+  height: 28mm;
+}
+
+.doc-foot {
+  margin: 0.5rem 0 0;
+  text-align: center;
+  color: #5b6679;
+  font-size: 0.8rem;
+}
+
+.doc-sign {
+  display: flex;
+  gap: 3rem;
+  margin-top: 2.5rem;
+}
+
+.doc-sign span {
+  flex: 1;
+  padding-top: 0.3rem;
+  border-top: 1px solid #16233a;
+  text-align: center;
+  font-size: 0.78rem;
+  color: #5b6679;
+}
+
+.doc-stamp {
+  position: absolute;
+  top: 98mm;
+  left: 18mm;
+  transform: rotate(-12deg);
+  padding: 0.2rem 0.9rem;
+  border: 3px solid currentColor;
+  border-radius: 6px;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.doc-stamp--success {
+  color: #1f8a4c;
+}
+
+.doc-stamp--danger {
+  color: #c0392b;
+}
+
+.doc-stamp--neutral {
+  color: #7a8396;
+}
+
+.doc-sheet--slip .doc-stamp {
+  position: static;
+  display: inline-block;
+  transform: none;
+  font-size: 1rem;
+  margin: 0.3rem 0;
+}
+
+.doc-dashed {
+  border: 0;
+  border-top: 1px dashed #16233a;
+  margin: 0.4rem 0;
+}
+
+.doc-section-title {
+  margin: 1rem 0 0.25rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #0b1f3a;
+}
+
+@media (max-width: 800px) {
+  .doc-sheet {
+    padding: 8mm 6mm;
+  }
+
+  .doc-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .doc-head {
+    flex-direction: column;
+  }
+
+  .doc-head__title {
+    text-align: left;
+  }
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  .doc-print,
+  .doc-print * {
+    visibility: visible !important;
+  }
+
+  .doc-print {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  .doc-stage {
+    padding: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  .doc-sheet {
+    width: 100% !important;
+    max-width: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    min-height: 0 !important;
+  }
+
+  .doc-sheet--slip {
+    width: 80mm !important;
+    margin: 0 auto;
+  }
+
+  .doc-table th {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

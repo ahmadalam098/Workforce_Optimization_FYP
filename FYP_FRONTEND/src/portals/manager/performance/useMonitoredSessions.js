@@ -20,7 +20,7 @@ function toSession(call) {
     organizationName: organization?.name ?? other.name,
     startedAt: call.createdAt,
     durationSeconds: seconds(call),
-    mediaUrl: null, // nothing is recorded yet: no sound or picture in the calls
+    mediaUrl: null, // nothing is recorded yet (live calls are watched, not stored)
     transcript: [],
     score: null,
     sentiment: null,

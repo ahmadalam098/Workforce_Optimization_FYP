@@ -94,8 +94,12 @@ io.use((socket, next) => {
   next(Object.assign(new Error('unauthorized'), { data: { reason } }))
 })
 
-/** Wraps an event so it always answers the client, refuses when the sign-in has expired, and limits flooding. */
-function handler(socket, run) {
+/**
+ * Wraps an event so it always answers the client, refuses when the sign-in has expired, and limits flooding.
+ * { unlimited: true } is for the WebRTC signalling: one connection sends many ICE candidates at once (more on a computer with several network
+ * adapters), and dropping any of them can stop the picture from ever arriving. Those events are still only allowed between the people of a call.
+ */
+function handler(socket, run, { unlimited = false } = {}) {
   const sent = []
   return async (payload, ack) => {
     const reply = typeof ack === 'function' ? ack : () => {}
@@ -108,7 +112,7 @@ function handler(socket, run) {
 
     const now = Date.now()
     while (sent.length > 0 && now - sent[0] > config.rateLimit.windowMs) sent.shift()
-    if (sent.length >= config.rateLimit.messages) {
+    if (!unlimited && sent.length >= config.rateLimit.messages) {
       reply({ ok: false, error: 'You are sending messages too fast. Wait a moment.' })
       return
     }

@@ -18,6 +18,7 @@ const TABS = [
   { id: 'general', label: 'General', section: 'General', description: 'Timezone, date and time style and language.' },
   { id: 'profile', label: 'Profile', description: 'Your name, email, picture and password.' },
   { id: 'users', label: 'Users & Roles', description: 'Roles, the accounts in each role, and account activation.' },
+  { id: 'billing', label: 'Billing', section: 'Billing', description: 'The company details, bank details and wording printed on invoices, receipts, statements and payslips.' },
   { id: 'notifications', label: 'Notifications', section: 'Notifications', description: 'Email and in-app notifications, workforce alerts and contract expiry alerts.' },
 ]
 

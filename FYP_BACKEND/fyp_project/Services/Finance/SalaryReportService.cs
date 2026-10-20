@@ -67,7 +67,7 @@ namespace fyp_project.Services
                                where i.EmpId == employeeId && r.PeriodYear == y
                                select new
                                {
-                                   r.PeriodMonth, r.Status, r.ApprovedAt, r.PaidAt,
+                                   i.ItemId, r.PeriodMonth, r.Status, r.ApprovedAt, r.PaidAt,
                                    i.Currency, i.BaseSalary, i.OvertimeHours, i.OvertimeAmount, i.Adjustment, i.AdjustmentNote, i.TotalAmount,
                                }).ToListAsync();
 
@@ -94,6 +94,8 @@ namespace fyp_project.Services
                     expectedAmount = inForce?.MonthlySalary,
                     approvedAt = showAmounts ? item!.ApprovedAt : null,
                     paidAt = state == Paid ? item!.PaidAt : null,
+                    // The payslip (a printable document) exists once the admin approved the payroll.
+                    payslipItemId = item != null && (state == Paid || state == Approved) ? item.ItemId : (int?)null,
                 };
             }).ToList();
 

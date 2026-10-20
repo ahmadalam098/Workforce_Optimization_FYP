@@ -197,6 +197,15 @@ namespace fyp_project.Services
             }
         }
 
+        /// <summary>An email about a bill to the organization's email address (invoice, receipt, statement, reminder). Returns a sentence to append to the answer.</summary>
+        public async Task<string> SendOrganizationDocumentAsync(int? actorUserId, int organizationId, string kindLabel, string subject, IEnumerable<string> paragraphs, IEnumerable<(string Label, string Value)> rows)
+        {
+            var org = await _db.Organizations.AsNoTracking().FirstOrDefaultAsync(o => o.OrgId == organizationId);
+            if (org == null || string.IsNullOrWhiteSpace(org.Email)) return " The organization has no email address, so no email was sent.";
+            var html = Layout(org.OrgName ?? "organization", paragraphs, rows);
+            return await SendAsync(actorUserId, "BILLING", "Organization", organizationId, org.Email, subject, html, kindLabel);
+        }
+
         /// <summary>Welcome email for a new account. Returns a sentence for the admin (starts with a space, ready to append).</summary>
         public async Task<string> SendWelcomeAsync(int? actorUserId, int userId, string name, string email, string roleLabel, string? organizations = null, IEnumerable<(string Label, string Value)>? details = null)
         {

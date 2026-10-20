@@ -11,7 +11,8 @@ import { useAuth } from '../../../context/useAuth.js'
 import { useFetch } from '../../../hooks/useFetch.js'
 import { useFlashNotice } from '../../../hooks/useFlashNotice.js'
 import { useFormFields } from '../../../hooks/useFormFields.js'
-import { employeeSettingsApi } from '../../../services/employee/employeeService.js'
+import BankDetailsForm from '../../../components/payments/BankDetailsForm.jsx'
+import { employeeBankApi, employeeSettingsApi } from '../../../services/employee/employeeService.js'
 import { formatDate, formatDateTime, humanize } from '../../../utils/format.js'
 import { onlyErrors, validateConfirmPassword, validateNewPassword, validatePhone, validateText } from '../../../utils/validators.js'
 import Notice from '../../admin/shared/Notice.jsx'
@@ -20,6 +21,7 @@ import { ErrorState } from '../../admin/shared/StateBox.jsx'
 
 const TABS = [
   { id: 'profile', label: 'Profile', description: 'Your picture and phone number, and your details as the admin has them.' },
+  { id: 'bank', label: 'Bank details', description: 'Where your salary is paid.' },
   { id: 'security', label: 'Security', description: 'Change your password and see when you signed in.' },
   { id: 'notifications', label: 'Notifications', description: 'Show or hide the notification bell.' },
 ]
@@ -272,7 +274,47 @@ function NotificationsTab({ onSaved }) {
   )
 }
 
-/** Employee: Settings (profile, security, notifications). */
+function BankTab({ onSaved }) {
+  const { data, error, loading, reload } = useFetch((signal) => employeeBankApi.get(signal), 'employee-settings-bank')
+  if (!data && loading) return <Spinner label="Loading..." />
+  if (!data) {
+    return (
+      <div className="card">
+        <ErrorState error={error} onRetry={reload} />
+      </div>
+    )
+  }
+  if (!data.hasEmployeeRecord) {
+    return (
+      <section className="card">
+        <div className="card__body">
+          <p className="cell-muted">Your employee profile is not set up yet. Please ask the admin.</p>
+        </div>
+      </section>
+    )
+  }
+  return (
+    <section className="card">
+      <div className="card__header">
+        <h3 className="card__title">Salary bank account</h3>
+      </div>
+      <div className="card__body form-stack">
+        <p className="cell-muted">Your salary is paid to this account. Only you and the admin can see it.</p>
+        <BankDetailsForm
+          key={data.bank.updatedAt ?? 'new'}
+          bank={data.bank}
+          onSave={(body) => employeeBankApi.save(body)}
+          onSaved={(message) => {
+            onSaved(message)
+            reload()
+          }}
+        />
+      </div>
+    </section>
+  )
+}
+
+/** Employee: Settings (profile, bank details, security, notifications). */
 function EmployeeSettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const activeTab = TABS.find((tab) => tab.id === searchParams.get('tab')) ?? TABS[0]
@@ -303,6 +345,7 @@ function EmployeeSettingsPage() {
       <Notice message={notice} onClose={() => setNotice('')} />
 
       {activeTab.id === 'profile' && <ProfileTab onSaved={setNotice} />}
+      {activeTab.id === 'bank' && <BankTab onSaved={setNotice} />}
       {activeTab.id === 'security' && <SecurityTab onSaved={setNotice} />}
       {activeTab.id === 'notifications' && <NotificationsTab onSaved={setNotice} />}
     </div>

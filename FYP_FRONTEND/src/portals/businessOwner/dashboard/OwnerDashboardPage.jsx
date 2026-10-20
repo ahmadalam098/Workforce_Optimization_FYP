@@ -127,7 +127,7 @@ function OwnerDashboardPage() {
       <section className="stat-grid" aria-label="Key metrics">
         <StatCard label="Organizations" value={organizations.total} caption={`${formatNumber(activeOrganizations)} active`} icon="building" />
         <StatCard label="Total employees" value={employees.total} caption={`${formatNumber(employees.active)} active · ${formatNumber(employees.inactive)} inactive`} icon="users" to="/owner/employees" />
-        <StatCard label="Total revenue" valueText={formatCurrencyWhole(money.revenuePkr, 'PKR')} caption={`Payments received · ${data.periodLabel}`} icon="trendUp" />
+        <StatCard label="Total revenue" valueText={formatCurrencyWhole(money.revenuePkr, 'PKR')} caption={`Payments received · ${data.periodLabel} · open statement`} icon="trendUp" to="/owner/statements" />
         <StatCard label="Total expense" valueText={formatCurrencyWhole(money.expensePkr, 'PKR')} caption={`Approved and paid payroll · ${data.periodLabel}`} icon="chart" />
         <StatCard
           label="Profit generated"

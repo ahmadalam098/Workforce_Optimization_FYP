@@ -203,6 +203,38 @@ export const reportsApi = {
   utilization: (params, signal) => apiRequest('/api/admin/reports/utilization', { params, signal }),
   allocations: (params, signal) => apiRequest('/api/admin/reports/allocations', { params, signal }),
   financial: (params, signal) => apiRequest('/api/admin/reports/financial', { params, signal }),
+  /** { asOf } -> { asOf, byOrganization: [{ orgId, orgName, currency, notDue, late1to30, late31to60, late61to90, over90, total, invoices }], totals, overdueInvoices } */
+  receivables: (params, signal) => apiRequest('/api/admin/reports/receivables', { params, signal }),
+}
+
+export const paymentSubmissionsApi = {
+  /** status: 'Open' (default: waiting for a decision) | 'Pending' | 'Verified' | 'Approved' | 'Rejected' | 'Withdrawn' | 'all' */
+  list: (status, signal) => apiRequest('/api/admin/payment-submissions', { params: { status }, signal }),
+  /** { count (open), toApprove (already verified by the manager) } */
+  pendingCount: (signal) => apiRequest('/api/admin/payment-submissions/pending-count', { signal }),
+  /** Records the payment on the invoice (the receipt exists then). body: { exchangeRate?, note? } -> { message, paymentId, receiptNumber } */
+  approve: (submissionId, body) => apiRequest(`/api/admin/payment-submissions/${submissionId}/approve`, { method: 'POST', body }),
+  reject: (submissionId, reason) => apiRequest(`/api/admin/payment-submissions/${submissionId}/reject`, { method: 'POST', body: { reason } }),
+}
+
+export const paymentsLedgerApi = {
+  /** params: { search, organizationId, from, to, method, verified, page, pageSize } -> { items, total, page, pageSize, totals: [{ currency, amount, amountPkr, count }] } */
+  list: (params, signal) => apiRequest('/api/admin/payments', { params, signal }),
+  /** The same filters, every matching payment (up to 5000), for a CSV. */
+  exportAll: (params) => apiRequest('/api/admin/payments/export', { params }),
+}
+
+export const billingMailApi = {
+  invoice: (invoiceId) => apiRequest(`/api/admin/invoices/${invoiceId}/email`, { method: 'POST' }),
+  reminder: (invoiceId) => apiRequest(`/api/admin/invoices/${invoiceId}/reminder`, { method: 'POST' }),
+  receipt: (paymentId) => apiRequest(`/api/admin/payments/${paymentId}/email`, { method: 'POST' }),
+  statement: (params) => apiRequest('/api/admin/statements/email', { method: 'POST', params }),
+}
+
+export const employeeBankAdminApi = {
+  /** { hasBank, bankName, accountTitle, accountNumber, updatedAt } */
+  get: (employeeId, signal) => apiRequest(`/api/admin/employees/${employeeId}/bank`, { signal }),
+  save: (employeeId, body) => apiRequest(`/api/admin/employees/${employeeId}/bank`, { method: 'PUT', body }),
 }
 
 export const employeesApi = {

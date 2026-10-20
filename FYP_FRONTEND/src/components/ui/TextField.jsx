@@ -5,7 +5,7 @@ import './TextField.css'
 /** Labeled input with optional leading icon, error text and show/hide toggle for passwords. */
 const LIMITED_TYPES = ['text', 'search', 'email', 'tel', 'url', 'password']
 
-function TextField({ label, error, hint, icon, type = 'text', id, className = '', inputClassName = '', ...inputProps }) {
+function TextField({ label, error, hint, icon, type = 'text', id, className = '', inputClassName = '', hideLabel = false, ...inputProps }) {
   const generatedId = useId()
   const inputId = id || generatedId
   const messageId = `${inputId}-message`
@@ -14,7 +14,7 @@ function TextField({ label, error, hint, icon, type = 'text', id, className = ''
 
   return (
     <div className={`field ${error ? 'field--error' : ''} ${className}`}>
-      <label className="field__label" htmlFor={inputId}>
+      <label className={hideLabel ? 'visually-hidden' : 'field__label'} htmlFor={inputId}>
         {label}
         {inputProps.required && <span className="field__required" aria-hidden="true"> *</span>}
       </label>

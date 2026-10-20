@@ -51,6 +51,10 @@ namespace fyp_project.Controllers.Admin
             return Ok(await _reports.AllocationAsync(start, end));
         }
 
+        // GET api/admin/reports/receivables?asOf=   (who owes what, by how late: not due, 1-30, 31-60, 61-90, over 90 days)
+        [HttpGet("receivables")]
+        public async Task<IActionResult> Receivables(DateOnly? asOf) => Ok(await _reports.ReceivablesAsync(asOf ?? Money.Today));
+
         // GET api/admin/reports/financial?from=&to=   (month by month; default = the last 6 months)
         [HttpGet("financial")]
         public async Task<IActionResult> Financial(DateOnly? from, DateOnly? to)

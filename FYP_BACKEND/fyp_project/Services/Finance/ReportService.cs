@@ -202,6 +202,41 @@ namespace fyp_project.Services
             };
         }
 
+        // ---------------------------------------------------------------- receivables (who owes what, and for how long)
+
+        /// <summary>
+        /// What organizations still owe on issued invoices, by how late it is (from the due date): not due yet, 1-30, 31-60, 61-90 and over 90 days.
+        /// One row per organization and currency, so nothing is added across currencies. <paramref name="orgIds"/> limits it to a manager's organizations.
+        /// </summary>
+        public async Task<object> ReceivablesAsync(DateOnly asOf, IReadOnlyCollection<int>? orgIds = null)
+        {
+            var query = _db.Invoices.AsNoTracking().Where(i => i.Status == "Issued" && i.PaidAmount < i.TotalAmount);
+            if (orgIds != null) query = query.Where(i => orgIds.Contains(i.OrgId));
+            var open = await query.Select(i => new { i.InvoiceId, i.InvoiceNumber, i.OrgId, OrgName = i.Org != null ? i.Org.OrgName : null, i.Currency, Balance = i.TotalAmount - i.PaidAmount, i.DueDate }).ToListAsync();
+
+            static int Bucket(DateOnly? due, DateOnly day)
+            {
+                if (due == null || due >= day) return 0;
+                var late = day.DayNumber - due.Value.DayNumber;
+                return late <= 30 ? 1 : late <= 60 ? 2 : late <= 90 ? 3 : 4;
+            }
+
+            object Row(IEnumerable<dynamic> items, string currency, int? orgId, string? orgName)
+            {
+                var sums = new decimal[5];
+                var list = items.ToList();
+                foreach (var i in list) sums[Bucket((DateOnly?)i.DueDate, asOf)] += (decimal)i.Balance;
+                return new { orgId, orgName, currency, notDue = sums[0], late1to30 = sums[1], late31to60 = sums[2], late61to90 = sums[3], over90 = sums[4], total = sums.Sum(), invoices = list.Count };
+            }
+
+            var byOrg = open.GroupBy(i => new { i.OrgId, i.OrgName, i.Currency }).OrderBy(g => g.Key.OrgName).ThenBy(g => g.Key.Currency)
+                .Select(g => Row(g.Cast<dynamic>(), g.Key.Currency, g.Key.OrgId, g.Key.OrgName)).ToList();
+            var totals = open.GroupBy(i => i.Currency).OrderBy(g => g.Key).Select(g => Row(g.Cast<dynamic>(), g.Key, null, null)).ToList();
+            var invoices = open.Where(i => Bucket(i.DueDate, asOf) > 0).OrderBy(i => i.DueDate)
+                .Select(i => new { i.InvoiceId, i.InvoiceNumber, i.OrgName, i.Currency, balance = i.Balance, dueDate = i.DueDate, daysLate = asOf.DayNumber - i.DueDate!.Value.DayNumber }).Take(200).ToList();
+            return new { asOf, byOrganization = byOrg, totals, overdueInvoices = invoices };
+        }
+
         // ---------------------------------------------------------------- financial
 
         public async Task<FinancialReportDto> FinancialAsync(DateOnly from, DateOnly to)

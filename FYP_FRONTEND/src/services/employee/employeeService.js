@@ -76,3 +76,9 @@ export const employeeOffersApi = {
   accept: (offerId) => apiRequest(`/api/employee/offers/${offerId}/accept`, { method: 'POST' }),
   decline: (offerId, note) => apiRequest(`/api/employee/offers/${offerId}/decline`, { method: 'POST', body: { note } }),
 }
+
+export const employeeBankApi = {
+  /** { hasEmployeeRecord, bank: { hasBank, bankName, accountTitle, accountNumber, updatedAt } } - where my salary is paid */
+  get: (signal) => apiRequest('/api/employee/bank', { signal }),
+  save: (body) => apiRequest('/api/employee/bank', { method: 'PUT', body }),
+}

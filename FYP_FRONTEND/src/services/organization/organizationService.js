@@ -64,6 +64,24 @@ export const organizationNotificationsApi = {
   readAll: () => apiRequest('/api/organization/notifications/read-all', { method: 'POST' }),
 }
 
+export const organizationPaymentsApi = {
+  /** The invoices that can still be paid: [{ invoiceId, invoiceNumber, currency, balance, payable, dueDate, overdue }] ('payable' = balance minus notices already waiting) */
+  payable: (signal) => apiRequest('/api/organization/payments/payable', { signal }),
+  /** My payment notices with their status (Pending, Verified, Approved, Rejected, Withdrawn), the manager's / admin's decision and the receipt number. */
+  submissions: (signal) => apiRequest('/api/organization/payments/submissions', { signal }),
+  /** formData: invoiceId, amount, method, reference, paidOn, note, file (JPG / PNG / WebP / PDF, up to 5 MB). */
+  submit: (formData) => apiRequest('/api/organization/payments/submissions', { method: 'POST', body: formData }),
+  withdraw: (submissionId) => apiRequest(`/api/organization/payments/submissions/${submissionId}/withdraw`, { method: 'POST' }),
+  /** { enabled, gateway, demo } - whether the admin allows paying online */
+  onlineOptions: (signal) => apiRequest('/api/organization/payments/online/options', { signal }),
+  /** body: { invoiceId, amount? } -> { token, checkoutPath } - the page to send the organization to (the gateway's checkout) */
+  startOnline: (body) => apiRequest('/api/organization/payments/online', { method: 'POST', body }),
+  /** One of my checkouts: { status: 'Created' | 'Paid' | 'Failed' | 'Cancelled' | 'Expired', receiptNumber, paymentId, failureReason ... } */
+  onlineStatus: (token, signal) => apiRequest(`/api/organization/payments/online/${token}`, { signal }),
+  /** My online payments: [{ token, invoiceId, invoiceNumber, amount, currency, status, failureReason, createdAt, completedAt, paymentId }] */
+  onlineList: (signal) => apiRequest('/api/organization/payments/online', { signal }),
+}
+
 export const organizationBillingApi = {
   /** { currencies: [{ currency, invoiced, paid, outstanding, overdueInvoices }], invoiceCount } */
   summary: (signal) => apiRequest('/api/organization/billing/summary', { signal }),

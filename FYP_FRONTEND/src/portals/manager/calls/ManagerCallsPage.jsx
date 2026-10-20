@@ -17,7 +17,7 @@ const TABS = [
 
 /**
  * Organization Manager: call your employees and organizations yourself, and see your own calls. Watching the calls of your employees and
- * cutting one is done in Performance Monitoring. The media is a dummy for now.
+ * cutting one is done in Performance Monitoring.
  */
 function ManagerCallsPage() {
   const { me, tick } = useCalls()
@@ -33,7 +33,7 @@ function ManagerCallsPage() {
     <div className="page">
       <PageHeader title="Calls" description="Call your employees and organizations by voice or video, and see your own calls." />
       <Alert type="info">
-        Calling is in preview: the calls ring and connect for real, but no sound or picture is sent yet. To watch the calls of your employees and cut one, open <Link to="/manager/performance">Performance Monitoring</Link>.
+        Calls use your camera and microphone (allow them when the browser asks). To watch the calls of your employees and cut one, open <Link to="/manager/performance">Performance Monitoring</Link>.
       </Alert>
 
       <div className="tabs" role="tablist" aria-label="Calls">

@@ -110,6 +110,20 @@ namespace fyp_project.Controllers.Admin
             var showWorkforce = await SettingsReader.GetBoolAsync(_db, SettingsCatalog.NotifyWorkforce);
             var alerts = await ExpiringContractsAsync();
 
+            // Payments the organizations announced, waiting for the admin's approval (the manager's verification is a step before).
+            var waiting = await SafeQuery.IfSchemaMissing(() => _db.PaymentSubmissions.AsNoTracking().Where(s => s.Status == PaymentSubmission.Pending || s.Status == PaymentSubmission.Verified).Select(s => new { s.SubmissionId, s.Status }).ToListAsync(), null);
+            if (waiting is { Count: > 0 })
+            {
+                var verified = waiting.Count(s => s.Status == PaymentSubmission.Verified);
+                alerts.Insert(0, new NotificationAlertDto
+                {
+                    Key = $"payment-submissions-{waiting.Count}-{waiting.Max(s => s.SubmissionId)}-{verified}",
+                    Title = $"{waiting.Count} payment{(waiting.Count == 1 ? string.Empty : "s")} to approve",
+                    Message = verified > 0 ? $"{verified} already verified by the organization manager." : "Organizations say they paid. Check and approve them.",
+                    Link = "/admin/payment-submissions",
+                });
+            }
+
             var state = await _db.NotificationStates.FirstOrDefaultAsync(s => s.UserId == me);
             if (state == null)
             {

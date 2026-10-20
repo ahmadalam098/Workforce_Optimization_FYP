@@ -5,6 +5,7 @@ import ConfirmDialog from '../../../components/ui/ConfirmDialog.jsx'
 import Icon from '../../../components/ui/Icon.jsx'
 import Spinner from '../../../components/ui/Spinner.jsx'
 import { useFetch } from '../../../hooks/useFetch.js'
+import LinkButton from '../../../components/ui/LinkButton.jsx'
 import { payrollApi } from '../../../services/admin/adminService.js'
 import { formatCurrency, formatDate, formatMonth } from '../../../utils/format.js'
 import Notice from '../shared/Notice.jsx'
@@ -110,6 +111,9 @@ function PayrollDetailsPage() {
           </div>
         </div>
         <div className="hero-card__actions">
+          <LinkButton to={`/admin/documents/payroll/${run.payrollId}`}>
+            <Icon name="file" size={17} /> Payroll sheet
+          </LinkButton>
           {isDraft && (
             <>
               <Button onClick={() => setConfirm('approve')}>
@@ -171,6 +175,9 @@ function PayrollDetailsPage() {
                         {item.employeeName}
                       </Link>
                       {item.currency !== 'PKR' && <span className="person__sub">1 {item.currency} = {item.exchangeRate} PKR</span>}
+                      <Link className="person__sub" to={`/admin/documents/payslip/${item.itemId}`}>
+                        Salary slip
+                      </Link>
                     </td>
                     <td className="num">{formatCurrency(item.baseSalary, item.currency)}</td>
                     <td className="num">

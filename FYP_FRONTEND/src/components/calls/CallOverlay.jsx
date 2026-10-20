@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getInitials } from '../../utils/format.js'
 import { useCalls } from './callContext.js'
+import StreamVideo from './StreamVideo.jsx'
 import './CallScreen.css'
 
 const KIND = { audio: 'Voice call', video: 'Video call' }
@@ -14,10 +15,10 @@ const WHO = { Employee: 'Employee', Manager: 'Organization manager', Organizatio
 
 /**
  * What the person sees of a call, on any page of the portal: an incoming call (Accept / Decline), the call screen (calling, then connected
- * with a timer, mute, camera, hang up) and a short notice when a call ended (for example cut by the manager). No sound or picture yet.
+ * with the real video, a timer, mute, camera, hang up) and a short notice when a call ended (for example cut by the manager).
  */
 function CallOverlay({ peerOf }) {
-  const { incoming, current, notice, clearNotice, answer, hangUp, toggle } = useCalls()
+  const { incoming, current, mediaView, notice, clearNotice, answer, hangUp, toggle } = useCalls()
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
@@ -47,7 +48,6 @@ function CallOverlay({ peerOf }) {
       <>
         <div className="call-screen" role="alertdialog" aria-modal="true" aria-label={`Incoming ${KIND[incoming.media]} from ${peer.name}`}>
           <div className="call-screen__panel">
-            <span className="call-screen__demo">Demo media - no sound or picture yet</span>
             <div className="call-screen__avatar" aria-hidden="true">
               {getInitials(peer.name || '?')}
             </div>
@@ -78,26 +78,36 @@ function CallOverlay({ peerOf }) {
     const peer = peerOf(call)
     const connected = call.status === 'Active' && current.startedAt
     const video = call.media === 'video'
+    const hasPicture = Boolean(mediaView.remoteStream?.getVideoTracks().length) && connected
     return (
       <>
         <div className="call-screen" role="dialog" aria-modal="true" aria-label={`${KIND[call.media]} with ${peer.name}`}>
           <div className="call-screen__panel">
-            <span className="call-screen__demo">Demo media - no sound or picture yet</span>
             {video ? (
-              <div className="call-screen__video" aria-hidden="true">
-                <div className="call-screen__avatar">{getInitials(peer.name || '?')}</div>
-                <div className="call-screen__self">{current.cameraOff ? 'Camera off' : 'You'}</div>
-                <span className="call-screen__video-note">Video will appear here when WebRTC is connected</span>
+              <div className="call-screen__video">
+                <StreamVideo stream={mediaView.remoteStream} className="call-screen__remote" hidden={!hasPicture} />
+                {!hasPicture && (
+                  <div className="call-screen__avatar" aria-hidden="true">
+                    {getInitials(peer.name || '?')}
+                  </div>
+                )}
+                {mediaView.localStream && !current.cameraOff ? <StreamVideo stream={mediaView.localStream} muted className="call-screen__local" /> : <div className="call-screen__self">{current.cameraOff ? 'Camera off' : 'No camera'}</div>}
+                {!hasPicture && <span className="call-screen__video-note">{connected ? 'Waiting for their picture...' : 'Connecting...'}</span>}
               </div>
             ) : (
-              <div className="call-screen__avatar" aria-hidden="true">
-                {getInitials(peer.name || '?')}
-              </div>
+              <>
+                <StreamVideo stream={mediaView.remoteStream} className="call-screen__sound" />
+                <div className="call-screen__avatar" aria-hidden="true">
+                  {getInitials(peer.name || '?')}
+                </div>
+              </>
             )}
             <h2 className="call-screen__name">{peer.name}</h2>
             <p className="call-screen__sub">
               {WHO[peer.type]} · {KIND[call.media]}
             </p>
+            {mediaView.note && <p className="call-screen__note">{mediaView.note}</p>}
+            {mediaView.connection === 'failed' && <p className="call-screen__note">The two devices could not reach each other. Both must be on this computer or the same Wi-Fi (no relay server is used).</p>}
             <p className="call-screen__status" aria-live="polite">
               {connected ? duration((now - current.startedAt) / 1000) : `Calling ${peer.name}...`}
             </p>

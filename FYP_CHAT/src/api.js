@@ -76,6 +76,7 @@ export const asUser = (token) => {
     getCall: (callId) => call(`/api/calls/${callId}`, { headers }),
     answer: (callId, accept) => call(`/api/calls/${callId}/answer?accept=${accept ? 'true' : 'false'}`, { method: 'POST', headers }),
     end: (callId) => call(`/api/calls/${callId}/end`, { method: 'POST', headers }),
+    monitor: () => call('/api/manager/calls/monitor', { headers }),
     cut: (callId, reason) => call(`/api/manager/calls/${callId}/cut`, { method: 'POST', headers, body: { reason } }),
   }
 }

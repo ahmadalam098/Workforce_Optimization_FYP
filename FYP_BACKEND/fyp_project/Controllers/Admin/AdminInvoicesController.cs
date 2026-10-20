@@ -17,6 +17,7 @@ namespace fyp_project.Controllers.Admin
         private readonly InvoiceService _invoices;
         private readonly PaymentRuleService _rules;
         private readonly ExchangeRateService _rates;
+        private readonly PaymentService _payments;
         private readonly AuditService _audit;
 
         public AdminInvoicesController(
@@ -24,12 +25,14 @@ namespace fyp_project.Controllers.Admin
             InvoiceService invoices,
             PaymentRuleService rules,
             ExchangeRateService rates,
+            PaymentService payments,
             AuditService audit)
         {
             _db = db;
             _invoices = invoices;
             _rules = rules;
             _rates = rates;
+            _payments = payments;
             _audit = audit;
         }
 
@@ -341,46 +344,19 @@ namespace fyp_project.Controllers.Admin
         {
             var invoice = await _db.Invoices.FirstOrDefaultAsync(i => i.InvoiceId == invoiceId);
             if (invoice == null) return NotFoundMessage("Invoice not found.");
-            if (invoice.Status != InvoiceService.Issued) return ConflictMessage("Payments can only be recorded on issued invoices that are not fully paid.");
 
-            var amount = Money.Round(request.Amount);
-            var balance = invoice.TotalAmount - invoice.PaidAmount;
-            if (amount > balance) return FieldError("amount", $"The payment is more than the remaining balance ({balance:0.00} {invoice.Currency}).");
-
-            var paidAt = request.PaidAt ?? DateTime.UtcNow;
-
-            decimal? rate = invoice.Currency == ExchangeRateService.Pkr
-                ? 1m
-                : request.ExchangeRate ?? await _rates.GetRateAsync(invoice.Currency, ExchangeRateService.Pkr, DateOnly.FromDateTime(paidAt));
-            if (rate == null)
-                return FieldError("exchangeRate", $"No {invoice.Currency} to PKR exchange rate is stored. Add one under Exchange Rates, or enter the rate here.");
-
-            _db.InvoicePayments.Add(new InvoicePayment
-            {
-                InvoiceId = invoiceId,
-                Amount = amount,
-                Currency = invoice.Currency,
-                ExchangeRate = rate.Value,
-                AmountPkr = Money.Round(amount * rate.Value),
-                PaidAt = paidAt,
-                Method = ContractLogic.Clean(request.Method),
-                Reference = ContractLogic.Clean(request.Reference),
-                Notes = ContractLogic.Clean(request.Notes),
-                RecordedBy = CurrentUserId,
-                CreatedAt = DateTime.UtcNow,
-            });
-
-            invoice.PaidAmount += amount;
-            if (invoice.PaidAmount >= invoice.TotalAmount) invoice.Status = InvoiceService.Paid;
-            await _db.SaveChangesAsync();
+            var result = await _payments.RecordAsync(invoice, request.Amount, request.PaidAt, request.Method, request.Reference, request.Notes, request.ExchangeRate, CurrentUserId);
+            if (!result.Ok) return result.Field == null ? ConflictMessage(result.Error!) : FieldError(result.Field, result.Error!);
 
             await _audit.LogAsync(CurrentUserId, "INVOICE_PAYMENT_RECORDED", "Invoice", invoiceId,
-                $"{invoice.InvoiceNumber}: {amount:0.00} {invoice.Currency} (rate {rate.Value})");
+                $"{invoice.InvoiceNumber}: {result.Payment!.Amount:0.00} {invoice.Currency} (rate {result.Payment.ExchangeRate}), receipt {DocumentCodes.ReceiptNumber(result.Payment)}");
 
             return Ok(new
             {
                 message = invoice.Status == InvoiceService.Paid ? "Payment recorded. The invoice is now fully paid." : "Payment recorded.",
                 invoiceId,
+                paymentId = result.Payment.PaymentId,
+                receiptNumber = DocumentCodes.ReceiptNumber(result.Payment),
                 status = invoice.Status,
                 balance = invoice.TotalAmount - invoice.PaidAmount,
             });

@@ -29,6 +29,9 @@ export const MANAGER_NAV_SECTIONS = [
     items: [
       { label: 'Invoices', icon: 'file', to: '/manager/invoices', ready: true },
       { label: 'Payments', icon: 'chart', to: '/manager/payments', ready: true },
+      { label: 'Payment Notices', icon: 'inbox', to: '/manager/payment-submissions', ready: true },
+      { label: 'Late Payments', icon: 'alert', to: '/manager/receivables', ready: true },
+      { label: 'Statements', icon: 'file', to: '/manager/statements', ready: true },
     ],
   },
   {

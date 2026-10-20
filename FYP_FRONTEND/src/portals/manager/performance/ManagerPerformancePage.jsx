@@ -32,7 +32,7 @@ const average = (sessions) => {
 
 /**
  * Organization Manager: monitor the audio and video calls of your employees and organizations - live, with the button to cut a call - and see how
- * each one went. The recordings, transcripts and quality scores are not there yet (no sound or picture in the calls); the numbers that exist
+ * each one went. The recordings, transcripts and quality scores are not there yet; the numbers that exist
  * (how many calls, the average length) are real. The employees and organizations in the filters and in the table are real.
  */
 function ManagerPerformancePage() {
@@ -76,8 +76,9 @@ function ManagerPerformancePage() {
 
       <Notice message={notice} onClose={() => setNotice('')} />
       <Alert type="info">
-        Calls of your employees and organizations appear here while they happen, and you can cut a call that should not go on. Recordings, transcripts and quality scores are not available yet: the
-        calls have no sound or picture for now.
+        Every call between your employees and your organizations appears here while it happens. Choose a live call and press Watch live to see both sides
+        side by side - you only watch, they cannot see or hear you. You can cut a call that should not go on. Recordings, transcripts and quality scores
+        are not available yet.
       </Alert>
 
       <section className="finance-tiles" aria-label="Performance overview">
