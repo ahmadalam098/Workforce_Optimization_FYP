@@ -166,33 +166,14 @@ Invoices: Draft -> Issued -> Paid, or Cancelled. Draft lines come from the contr
 
 | Method | Route | Purpose |
 |---|---|---|
-| GET | /api/admin/invoices | List. Query: search, status (Draft/Issued/PartiallyPaid/Overdue/Paid/Cancelled), organizationId, page, pageSize |
+| GET | /api/admin/invoices | List. Query: search, status (PendingVerification/Issued/PartiallyPaid/Overdue/Paid/Cancelled), organizationId, page, pageSize. A draft the manager has not sent yet is not listed. |
 | GET | /api/admin/invoices/{id} | Lines + payments |
-| POST | /api/admin/invoices/preview | { orgId, periodStart, periodEnd } -> lines, base/extra hours, total (nothing saved) |
-| POST | /api/admin/invoices | Create Draft (409 if the period overlaps a non-cancelled invoice of that organization) |
-| POST | /api/admin/invoices/{id}/recalculate | Draft: rebuild generated lines, keep adjustments |
-| POST | /api/admin/invoices/{id}/lines | Draft: add adjustment { description, quantity, unitRate } |
-| DELETE | /api/admin/invoices/{id}/lines/{lineId} | Draft: remove an adjustment line |
-| POST | /api/admin/invoices/{id}/issue | Draft -> Issued; due date = today + INVOICE_DUE_DAYS rule |
+| POST | /api/admin/invoices/{id}/verify | The admin verifies the invoice the manager sent: Draft -> Issued (verified_at / verified_by = the admin); due date = today + INVOICE_DUE_DAYS rule. 409 if the manager has not sent it. Audit INVOICE_ISSUED |
+| POST | /api/admin/invoices/{id}/return | { reason } sends the draft back to the manager. Audit INVOICE_RETURNED |
 | POST | /api/admin/invoices/{id}/cancel | { reason }; not allowed once payments exist |
 | POST | /api/admin/invoices/{id}/payments | { amount, paidAt, method, reference, notes, exchangeRate }; cannot exceed the balance |
-| GET | /api/admin/finance/summary | Outstanding / overdue per currency, collected this month (PKR), payroll this month (PKR), profit (calculated) |
+| GET | /api/admin/finance/summary | Outstanding / overdue per currency, collected this month (PKR), expenses this month (PKR), profit (calculated), profit waiting to be sent to the owners |
 | GET | /api/admin/finance/organizations | Payment status per organization and currency |
-| GET | /api/admin/salaries | Active employees with their current salary. Query: search, organizationId, hasSalary, page, pageSize |
-| GET | /api/admin/salaries/{employeeId}/history | All salary structures |
-| POST | /api/admin/salaries/{employeeId} | { monthlySalary, currency, effectiveFrom, notes }; the current one ends the day before |
-| GET | /api/admin/payroll | Runs |
-| GET | /api/admin/payroll/{id} | Run + one line per employee |
-| POST | /api/admin/payroll | { year, month } -> Draft from salary structures + approved overtime of that month (needs an exchange rate for non-PKR salaries) |
-| PUT | /api/admin/payroll/{id}/items/{itemId} | Draft: { adjustment, adjustmentNote } |
-| POST | /api/admin/payroll/{id}/refresh-overtime | Draft: re-read approved overtime |
-| POST | /api/admin/payroll/{id}/approve | Draft -> Approved |
-| POST | /api/admin/payroll/{id}/pay | Approved -> Paid |
-| DELETE | /api/admin/payroll/{id} | Draft only |
-| GET | /api/admin/overtime | Query: status, year, month, search, page, pageSize |
-| POST | /api/admin/overtime | { employeeId, organizationId, workDate, totalHours } (Pending; rate from the salary structure: fixed rate or salary / WORKING_HOURS_PER_MONTH x OVERTIME_MULTIPLIER) |
-| POST | /api/admin/overtime/{id}/approve | Pending -> Approved (only approved overtime is paid) |
-| POST | /api/admin/overtime/{id}/reject | Pending -> Rejected |
 | GET | /api/admin/payment-rules | Built-in and custom rules |
 | POST | /api/admin/payment-rules | Custom rule { ruleKey, title, value, unit, description } |
 | PUT | /api/admin/payment-rules/{id} | Edit title/value/unit/description (key never changes) |
@@ -321,11 +302,6 @@ All Admin only. Values are stored as text in System_Setting (no new table).
 - `GET /api/manager/overview` (policy ManagerOnly) -> `{ fullName, email, organizations: [{ organizationId, name, email, status }] }`, only the organizations the admin assigned to this manager.
 - Frontend: `/manager/dashboard` (ManagerLayout, same theme as the Admin portal); the other sidebar items are marked "Soon".
 
-### Employees: monthly salary instead of hourly rate
-- `POST /api/admin/employees` now requires `monthlySalary` (PKR, more than 0) instead of `hourlyRate`; it creates the employee's first Salary_Structure record (starting on the joining date). `hourlyRate` is no longer read or written by the Admin API (the column stays in the table).
-- `PUT /api/admin/employees/{id}` accepts an optional `monthlySalary`. A different amount ends the current salary yesterday and starts the new one today (history kept); a salary that began today is corrected in place; the same amount changes nothing; an older employee with no salary gets one. Written to the audit log (`... monthly salary X PKR (was Y)`).
-- Employee list and details return `monthlySalary` and `salaryCurrency` (the open salary record). The Salaries page still manages dated changes, overtime rate and currency.
-
 ### Organization Manager: employee pool and manual allocations (policy ManagerOnly)
 Uses the same AllocationService and rules as the Admin portal, but only for the organizations the admin assigned to the manager. A broken contract rule (not approved, no active contract, capacity, borrowing, availability) always blocks; the manager gets no override.
 - `GET /api/manager/allocations/skills` -> `[{ skillId, name }]`
@@ -339,16 +315,22 @@ Uses the same AllocationService and rules as the Admin portal, but only for the 
 ### Organization Manager dashboard
 - `GET /api/manager/dashboard` (ManagerOnly) -> `{ fullName, organizations, activeOrganizations, pendingOrganizations, employeesWorking, freeEmployees, activeContracts, pendingRequests, openQueries, availability: [{status,count}], employeesByOrganization: [{organizationId,name,count}], recentActivity: [{allocationHistoryId, actionType, actionTime, employee, from, to, isAllocatedByAi}] }`. Everything is limited to the organizations the admin assigned to the manager. The frontend dashboard uses the same layout, cards and styles as the Admin dashboard.
 
-### Organization Manager: invoices and payments (migration 011 required)
-Migration `FYP_DB/migrations/011_manager_verification.sql` adds nullable `verified_at` / `verified_by` to `Invoice` and `Invoice_Payment` (run it after 005; the Admin invoice screens need it too because the models now read these columns).
-All endpoints need the ManagerOnly policy and only see the manager's own organizations; draft invoices are never shown.
-- `GET /api/manager/billing/summary` -> `{ currencies: [{ currency, invoiced, paid, outstanding, overdueInvoices }], invoiceCount, unverifiedInvoices, unverifiedPayments }`
-- `GET /api/manager/billing/invoices?search&status=Issued|PartiallyPaid|Overdue|Paid|Cancelled&organizationId&verified&page&pageSize`
-- `GET /api/manager/billing/invoices/{id}` (lines, payments, `canVerify`, verification info)
-- `POST /api/manager/billing/invoices/{id}/verify` (409 if cancelled or already verified) - audit INVOICE_VERIFIED
+### Invoice workflow: the manager prepares, the admin verifies (migrations 011 and 023)
+**The admin no longer creates invoices.** The organization manager creates a Draft, adjusts it and sends it; the admin verifies it (which issues it), sends it back with a reason, or cancels it. Migration `FYP_DB/migrations/023_invoice_manager_workflow.sql` adds `submitted_at`, `submitted_by`, `returned_reason` to `Invoice` (`verified_at` / `verified_by` from migration 011 now mean "verified by the admin"). Logic: `Services/Finance/InvoiceWorkflowService.cs`.
+
+Stages: **Draft** (manager is preparing; only the manager sees it) -> **PendingVerification** (sent; the admin sees it, nobody can edit) -> **Issued** (admin verified; the organization sees and pays it) -> Paid. Cancelled at any point before payment. Sent back = Draft again with `returnedReason`.
+
+- `GET /api/manager/billing/summary` -> `{ currencies: [...], invoiceCount, draftsToSend, returnedDrafts, waitingForAdmin, unverifiedPayments }`
+- `GET /api/manager/billing/invoices?search&status=Draft|PendingVerification|Issued|PartiallyPaid|Overdue|Paid|Cancelled&organizationId&verified&page&pageSize` (drafts included; `verified` = verified by the admin)
+- `GET /api/manager/billing/invoices/{id}` (lines, payments, `canEdit`, `waitingForAdmin`, `submittedAt`, `returnedReason`, `verifiedAt` / `verifiedBy`)
+- `POST /api/manager/billing/invoices/preview` and `POST /api/manager/billing/invoices` `{ orgId, periodStart, periodEnd, notes? }` (only for the organizations the manager manages; 409 when the period overlaps another invoice) - audit INVOICE_CREATED
+- `POST .../invoices/{id}/recalculate`, `POST .../invoices/{id}/lines` `{ description, quantity, unitRate }`, `DELETE .../invoices/{id}/lines/{lineId}` (only while the draft has not been sent)
+- `POST .../invoices/{id}/submit` (send to the admin; total must be above zero) - audit INVOICE_SUBMITTED; `POST .../invoices/{id}/discard` `{ reason }` (cancel a draft never sent)
+- `POST /api/manager/billing/invoices/{id}/verify` now always answers 409: invoices are verified by the admin.
+- Bells: the admin bell shows an alert "N invoices to verify" and INVOICE_SUBMITTED; the manager bell shows INVOICE_RETURNED and INVOICE_ISSUED; the organization is told when the invoice is issued, as before.
 - `GET /api/manager/billing/payments?search&organizationId&verified&page&pageSize`
 - `POST /api/manager/billing/payments/{id}/verify` - audit PAYMENT_VERIFIED
-- Admin: `GET /api/admin/invoices/{id}` now also returns `verifiedAt` / `verifiedBy` on the invoice and on each payment; the Admin invoice page shows a "Verified by ..." badge.
+- Admin: `GET /api/admin/invoices/{id}` returns `preparedBy`, `submittedBy`, `submittedAt`, `returnedReason`, `verifiedAt` / `verifiedBy` (the admin) and, per payment, the manager's verification (the manager still verifies payments).
 - Frontend: `/manager/invoices`, `/manager/invoices/:id`, `/manager/payments`.
 
 ### Organization Manager chat (migration 012, Node.js chat server in FYP_CHAT)
@@ -394,12 +376,6 @@ An employee's query is a `Ticket` with `source = "Employee"` and `raised_by_user
 - `GET /api/manager/organizations/{id}` (404 for an organization that is not theirs) - address, registration dates, the active contract's terms (period, min/max employees, borrowing, priority, billing currency and cycle), the organization's managers (marking the caller), the employees working there (with "borrowed"), and counts of open queries / complaints / employee queries.
 - `GET /api/manager/employees/{id}` (active employees) - skills with level, current shift, where they work now (since, planned end, borrowed), allocation history **only for the manager's own organizations**, and the employee's queries in those organizations. `isMine` = works for (or, when free, belongs to) one of the manager's organizations: only then are email, phone and country returned. Pay, CNIC and passwords are never returned.
 - Frontend: `/manager/organizations`, `/manager/organizations/:orgId`, `/manager/employees/:employeeId` (a View button and the employee's name in the Employee Pool link to it).
-
-### Organization Manager: salary status of the employees (read only, no new migration)
-Pay is visible to the manager only here (and in the salary card of an own employee); CNIC and passwords are never shown. Covers the manager's own employees (works for one of their organizations now, or, when free, belongs to one).
-- `GET /api/manager/salaries?year&month&search&organizationId&status=Paid|Approved|Draft|NotProcessed&page&pageSize` - each employee's monthly salary (open salary record) and, for the month (default: this month), the payroll status from the admin's payroll: **Paid**, **Approved** (waiting to be paid), **Draft** (being prepared) or **NotProcessed** (not in a payroll yet), with the amount (base, overtime, adjustment, total) and paid date. `summary` has the counts, the number without a salary set, and the paid / still-to-pay amounts per currency.
-- `GET /api/manager/salaries/employees/{id}` - the last 12 months of one of the manager's employees (404 for anyone else's).
-- Frontend: `/manager/salaries` ("Salary Status") and a "Salary status" card on `/manager/employees/:id` for the manager's own employees.
 
 ### Organization Manager: staff requests and manual staffing (the fallback when the AI allocation does not work; no new migration)
 The manager sees the staff requests of their organizations (like the admin does) and staffs an **approved** request by hand from the employee pool, with the same AllocationService rules as the admin (approved organization, active contract, capacity, borrowing, availability). A broken rule always blocks: the manager gets no override. The admin still approves or rejects a request.
@@ -470,21 +446,6 @@ Employees send their own queries and complaints; the testing setup that logged a
 ## Employee - My Shifts
 `GET /api/employee/shifts` (`EmployeeOnly`, `Controllers/Employee/EmployeeShiftsController.cs`, read only): `{ hasEmployeeRecord, workingOrganization, shifts: [{ assignmentId, shiftName, startTime, endTime, startDate, endDate (null = ongoing), assignedBy, notes }] }`, newest first (max 200). The page works out today's shift and its status, the Monday-Sunday week and the Current / Upcoming / Past filters in the browser. No new migration.
 
-## Employee - My Salary (salary report)
-`GET /api/employee/salary?year=` (`EmployeeOnly`, `Controllers/Employee/EmployeeSalaryController.cs`, read only). It reads the same tables the admin and the organization manager use, so all three always agree:
-- `Salary_Structure` (what the admin decided: monthly salary, currency, since when, earlier salaries),
-- `Payroll_Run` / `Payroll_Item` (what the admin's payroll did with it).
-
-Response: `{ hasEmployeeRecord, year, years, currentSalary, history, months[12], summary }`. Each month has a `status`: `Paid`, `Approved` (waiting to be paid), `Draft` (being prepared - amounts are hidden because the admin can still change them), `NotProcessed`, `Upcoming` (future month) or `BeforeStart` (before the first salary; never counted as pending). Paid/Approved months carry base, overtime hours and amount, adjustment (+ note) and total; others carry `expectedAmount` (the monthly salary in force). `summary` = months paid and pending, with the amounts received and still to receive per currency (pending uses the approved total when known, otherwise the monthly salary).
-
-The same month in the manager's Salary Status (`GET /api/manager/salaries`) shows the same status and total. No new migration.
-
-## Admin - Salaries: no overtime rate, paid / unpaid months
-- The per-employee "Overtime / hour" was removed everywhere (column, form field, history, API fields `overtimeRate` / `effectiveOvertimeRate`). The overtime rate used by the Overtime module is always `salary / working hours x overtime multiplier` from Payment Rules. The old `Salary_Structure.overtime_rate` column is left in the database but is no longer read or written.
-- `GET /api/admin/salaries?year=` - every item now has `paidMonths` and `pendingMonths` of that year (months before the employee's first salary never count).
-- `GET /api/admin/salaries/{employeeId}/months?year=` - month by month for one employee: `{ employeeId, fullName, year, years, currentSalary, history, months[12], summary }` (same shape as the employee's report; the admin also sees the amounts of a draft payroll).
-- Both, and the employee's `GET /api/employee/salary`, use `Services/Finance/SalaryReportService.cs`, so the admin, the employee and the manager agree.
-
 ## Employee - My Hours (week / month)
 `GET /api/employee/hours?from=yyyy-MM-dd&to=yyyy-MM-dd` (`EmployeeOnly`, `Controllers/Employee/EmployeeHoursController.cs`, read only, at most 62 days): `{ hasEmployeeRecord, days: [{ date, shiftName, startTime, endTime, scheduledHours, overtimeHours (Approved), pendingOvertimeHours }] }`.
 
@@ -531,15 +492,15 @@ Business Owners cannot register themselves: the admin creates the account (Admin
 
 ## Business Owner - dashboard, employees, notifications
 `BusinessOwnerOnly`, `Controllers/BusinessOwner/`. Read only; nothing is stored, no new migration. The figures mean the same as in the Admin Finance page:
-- **Revenue** = payments received (`Invoice_Payment.amount_pkr`) in the period; **Expense** = payroll runs that are Approved or Paid (`Payroll_Run.total_pkr`, by payroll month; drafts are ignored); **Profit** = revenue - expense (calculated).
+- **Revenue** = payments received (`Invoice_Payment.amount_pkr`) in the period; **Expense** = the expenses the admin wrote down (`Company_Expense.amount_pkr`, voided ones left out; there is no salary or payroll any more); **Profit** = revenue - expense (calculated).
 - **Pending payments** = issued invoices that are not fully paid (per organization and currency, with the overdue part); drafts, cancelled and paid invoices are left out. Not tied to the period.
-- **Profit per owner:** the profit is shared **equally** between the active Business Owners (there is no ownership percentage in the system); the odd paisa goes to the first owner. The page shows it only when there is more than one owner.
+- **Profit per owner:** the admin sends the profit that is left to the active Business Owners, shared **equally** (the odd paisa goes to the first owner). The dashboard also shows `money.sentToOwnersPkr` (sent in the period) and `money.waitingToBeSentPkr` (still to be sent). See the next sections.
 
 | Method | Path | What it does |
 |---|---|---|
 | GET | `/api/business-owner/dashboard?period=allTime\|thisMonth\|lastMonth\|thisYear` | organizations (total, by status), employees (total, active, inactive), money, owners and their shares, pending payments, utilization (`working / active employees`), employees working per organization (top 10 + other), allocation activity of the last 14 days (`Allocation_History`: Allocated / Reallocated / Released per day) |
 | GET | `/api/business-owner/employees?status=active\|inactive&search=&page=&pageSize=` | the employee list with `counts: { total, active, inactive }`; opened from the Employees card |
-| GET / POST | `/api/business-owner/notifications`, `/read-all` | the bell: only `INVOICE_PAYMENT_RECORDED` ("Revenue added") and `PAYROLL_APPROVED` ("Expense added"), each saying what it does to the profit. A revenue or expense can only grow today (a payment or an approved payroll is never taken back); add a removal's audit action to `RevenueRemoved` / `ExpenseRemoved` in `BusinessOwnerNotificationsController` when one exists |
+| GET / POST | `/api/business-owner/notifications`, `/read-all` | the bell: revenue added (`INVOICE_PAYMENT_RECORDED`), an expense added or voided (`EXPENSE_ADDED`, `EXPENSE_VOIDED`) and - for that owner only - `OWNER_PAYOUT_SENT` ("Profit sent to you", opens the receipt). |
 
 The dashboard page asks again every 10 seconds (while the tab is visible), when something is saved anywhere, and when the tab is focused, so the utilization, the bars and the allocation chart change when an allocation changes. The page uses the same layout, colours and fonts as the Admin and Manager dashboards (gold hero, stat cards, gold bar list); the activity chart uses the same three status colours as the Admin dashboard (green, blue, gold), checked with the dataviz validator (all pairs pass; the gold is below 3:1 contrast, so the chart has a legend, a tooltip and a "Show as table" view).
 
@@ -661,23 +622,41 @@ Run `FYP_DB/migrations/020_offers_and_calls.sql` (`Assignment_Offer`, `Call_Sess
 - **WebRTC (real):** `FYP_FRONTEND/src/components/calls/webrtc/` (`peerSession.js` = RTCPeerConnection, `localMedia.js` = camera/microphone with fallbacks, `iceConfig.js` = network settings, **no TURN server**; optional `VITE_STUN_URLS`). Offer / answer / ICE travel as `call:signal` through the chat server; the sound and picture go directly between the browsers (works on one computer or one Wi-Fi). Camera/microphone need `http://localhost` or https. No backend change was needed.
 - **Screens:** Employee > My Assignments, Calls; Organization > Live Team; Manager > Assignment Offers, Calls (Call someone / My calls), and **Performance Monitoring** (the live calls and the finished ones of the manager's employees, with Cut this call); the incoming-call screen shows on any page of the portal.
 
-## Payment module: documents, announced payments, ledger, receivables, bank details (migration 021)
+## Payment module: documents, announced payments, ledger, receivables (migration 021)
 
-Run `FYP_DB/migrations/021_payments_documents.sql` (`Payment_Submission`, `Employee_Bank`). Deliberately **not** included: tax, discounts / offers, bonuses, overtime features (a payslip shows the overtime line only when the existing payroll already has an overtime amount).
+Run `FYP_DB/migrations/021_payments_documents.sql` (`Payment_Submission`; `Employee_Bank` is no longer used). Deliberately **not** included: tax, discounts / offers, bonuses, overtime features (a payslip shows the overtime line only when the existing payroll already has an overtime amount).
 - **Documents** (`DocumentsController`, `/api/documents`, any signed-in portal; each caller gets only their own): `invoice/{id}` (a draft is admin-only; an organization its own; a manager his organizations'), `receipt/{paymentId}`, `statement?orgId&from&to` (an organization always its own), `payslip/{itemId}` (employee own, manager of the employee's organization, admin; only once the payroll is Approved/Paid, a draft only for the admin), `payroll/{id}` (admin), `profit?from&to` (business owners, admin), `proof/{submissionId}` (the file of a payment notice). One server builds every document (`DocumentService`), so all portals see the same one. Numbers come from existing ids: `RCP-2026-00012`, `SLP-202609-00007`, `STM-0008-20260701-20261018`, `PAY-...`, `PRF-...`. Each has the company letterhead (Admin > Settings > **Billing**: name, address, phone, email, registration number, bank details, payment terms, footer), the amount in words, and a verification `code`.
-- **Public check:** `GET /api/verify/{invoice|receipt|payslip}/{number}?c=CODE` (no sign-in; the QR on every document opens `/verify/...`). The code is an HMAC of the document only the server can make. A payslip check never shows the name or the amount.
+- **Public check:** `GET /api/verify/{invoice|receipt|payout}/{number}?c=CODE` (no sign-in; the QR on every document opens `/verify/...`). The code is an HMAC of the document only the server can make. A payslip check never shows the name or the amount.
 - **Announced payments** (organization -> manager -> admin): Organization `GET payable`, `GET|POST /api/organization/payments/submissions` (multipart: invoiceId, amount, method, reference, paidOn, note, file; the file is checked by content: JPG / PNG / WebP / PDF up to 5 MB, stored outside the web folder), `POST .../{id}/withdraw` (only while nobody decided). The amount cannot exceed the balance minus notices already waiting. Manager `/api/manager/billing/submissions` (`GET ?status`, `GET pending-count`, `POST {id}/verify`, `POST {id}/reject {reason}`). Admin `/api/admin/payment-submissions` (`GET ?status=Open|...|all`, `pending-count`, `POST {id}/approve {exchangeRate?, note?}`, `POST {id}/reject`). **Approving** goes through `PaymentService.RecordAsync` (the same code as "Record payment"): the payment is saved with its PKR value, the manager's verification is kept on it, the invoice becomes Paid when the balance is 0, and the receipt exists. Audit entries feed the bells (`PAYMENT_SUBMITTED`, `_VERIFIED`, `_APPROVED`, `_REJECTED`, `_WITHDRAWN`); the admin's and the manager's bell also show an alert with the number waiting.
 - **Ledger** (`/api/admin/payments?search&organizationId&from&to&method&verified&page&pageSize` with totals per currency, `/export` up to 5000 rows for CSV).
 - **Email a bill to the organization:** admin `POST /api/admin/invoices/{id}/email`, `.../reminder`, `POST /api/admin/payments/{id}/email` (receipt), `POST /api/admin/statements/email?orgId&from&to`; manager `POST /api/manager/billing/invoices/{id}/reminder`. Draft and cancelled invoices are never emailed.
 - **Receivables (aging):** admin `GET /api/admin/reports/receivables?asOf` and manager `GET /api/manager/billing/receivables` - per organization and currency: not due, 1-30, 31-60, 61-90, over 90 days late, plus the late invoices.
-- **Bank details for salaries:** employee `GET|PUT /api/employee/bank` (Settings > Bank details), admin `GET|PUT /api/admin/employees/{id}/bank` (card on the employee's page). The payroll sheet lists the bank details and warns about employees without them; a payslip shows only the end of the account number. `GET /api/employee/salary` months now carry `payslipItemId`.
 - **Screens:** Admin > Payments, Payment Notices, Statements, Reports > Receivables, Settings > Billing, invoice / payroll pages (Print, Email, Reminder, Receipt, Salary slip, Payroll sheet); Manager > Payment Notices, Late Payments, Statements, invoice page (Print, Remind); Organization > Payments (tell us about a payment), Statements, invoice page (Print, I paid this, Receipt); Employee > My Salary (Salary slip), Settings > Bank details; Owner > Profit Statement. Documents print as an A4 page or an 80 mm slip (Print / Save as PDF).
 
-## Pay online (demo payment gateway) (migration 022)
+## Pay online (Safepay or demo payment gateway) (migration 022)
 
-Run `FYP_DB/migrations/022_online_payments.sql` (`Online_Payment`). **The gateway is a DEMO: no real money moves.** Its checkout page (`/pay/demo/{token}`) is clearly marked, and the buttons Pay / Simulate a declined card / Cancel play the part of the gateway's confirmation.
+Run `FYP_DB/migrations/022_online_payments.sql` (`Online_Payment`). The gateway is **Safepay** (next section) or the **demo** one (no real money). The demo checkout page (`/pay/demo/{token}`) is clearly marked, and the buttons Pay / Simulate a declined card / Cancel play the part of the gateway's confirmation.
 - **Flow:** the organization chooses an invoice and an amount -> `POST /api/organization/payments/online { invoiceId, amount? }` makes a checkout (a secret token) and returns `checkoutPath` -> the browser goes to the gateway's page -> the gateway reports `paid` / `failed` / `cancelled` -> on `paid` the payment is recorded with `PaymentService` (the same code as every other payment): receipt, ledger, statement, bells (`INVOICE_PAYMENT_RECORDED`, `ONLINE_PAYMENT_FAILED`), receipt email, owner profit. A gateway payment is marked verified without a manager (the bank confirmed it); the method is "Online payment" and the reference is the gateway's. A repeated confirmation never pays twice.
-- **Rules:** only the organization's own issued invoice; at most the balance minus what is already waiting (open payment notices and open checkouts reserve their amount); a checkout nobody finishes in 30 minutes expires; a foreign-currency invoice needs a stored exchange rate **before** the checkout starts; the admin can switch it off in Settings > Billing ("Allow paying online").
+- **Rules:** only the organization's own issued invoice; **always the whole open balance in one payment** (the `amount` field is ignored; the organization portal has no "I paid another way" / "Tell us about a payment" any more, older payment notices are still listed); starting again first asks the gateway about the organization's unfinished earlier attempt for that invoice and closes it ("Replaced by a new payment attempt"), and a closed attempt that the gateway later reports as paid is still recorded; a checkout nobody finishes in 30 minutes expires; a foreign-currency invoice needs a stored exchange rate **before** the checkout starts; the admin can switch it off in Settings > Billing ("Allow paying online").
 - **Endpoints:** `GET /api/organization/payments/online/options`, `POST .../online`, `GET .../online/{token}`, `GET .../online`; the demo gateway's side (no sign-in, the token is the key): `GET /api/gateway/demo/{token}`, `POST /api/gateway/demo/{token}/pay|fail|cancel`.
-- **Real gateway later:** implement `IPaymentGateway` (`Name`, `IsDemo`, `CheckoutPath`) for JazzCash / Easypaisa / PayFast / Stripe, add its signed webhook that calls `OnlinePaymentService.CompleteAsync(token, "paid"|"failed"|"cancelled", gatewayReference)`, register it in `Program.cs` instead of `DemoPaymentGateway`, keep its keys in `appsettings.json` (never in git). `DemoGatewayController` answers 404 when the gateway is not the demo one. **Never leave the demo gateway enabled in a real deployment** - anybody with a checkout token could "pay" an invoice without paying.
+- **Gateway choice:** appsettings `Payments:Gateway` = `Safepay` (real, see below) or `Demo` (default). `DemoGatewayController` answers 404 when the gateway is not the demo one. **Never leave the demo gateway enabled in a real deployment** - anybody with a checkout token could "pay" an invoice without paying.
+
+## Safepay (real payment gateway, sandbox) - no migration
+- **Files:** `Services/Finance/SafepayGateway.cs` (`SafepayOptions`, `SafepayClient`, `SafepayGateway`), `Controllers/Common/SafepayWebhookController.cs`, `Controllers/Admin/AdminOnlinePaymentsController.cs`; frontend `portals/common/GatewayReturnPage.jsx` (routes `/pay/safepay/return/:token` and `/pay/safepay/cancel/:token`) and `portals/admin/finance/OnlinePaymentsPage.jsx` (Admin > Online Payments).
+- **Config (appsettings.json only, never in git):** `"Payments": { "Gateway": "Safepay" }` and `"Safepay": { "Environment": "sandbox", "PublicKey", "SecretKey", "WebhookSecret" (optional), "ReturnBaseUrl": "http://localhost:5173" }`. A template is in `appsettings.example.json`.
+- **Safepay calls (checked against the sandbox):** `POST /order/payments/v3/` creates the tracker (amount in minor units: PKR 1,500 = 150000); `POST /client/passport/v1/token` gives the checkout token (`data`); `GET /reporter/api/v1/payments/{tracker}` gives `data.state` (`TRACKER_ENDED` = paid). Every call sends the header `X-SFPY-MERCHANT-SECRET`. Hosted page: `https://sandbox.api.getsafepay.com/embedded?environment=sandbox&tracker=..&source=hosted&tbt=..&redirect_url=..&cancel_url=..`.
+- **Flow:** the organization presses Pay online -> `POST /api/organization/payments/online` creates the tracker (kept in `Online_Payment.gateway_reference`) and returns the Safepay link -> the organization pays on Safepay -> Safepay sends the browser to `/pay/safepay/return/{token}` -> `POST /api/organization/payments/online/{token}/confirm` (`?cancelled=true` from the cancel page) -> **our server asks Safepay** for the tracker state (the browser is never trusted) -> when paid: `PaymentService.RecordAsync` (method "Online - Safepay", reference = tracker, no manager check), receipt, bells, receipt email.
+- **Webhook:** `POST /api/gateway/safepay/webhook`. Set it in the Safepay dashboard > Developer > Endpoints, for example `https://<your-ngrok-address>/api/gateway/safepay/webhook`. The signature `X-SFPY-SIGNATURE` (hex HMAC-SHA512 of the raw body with the endpoint's shared secret) is checked when `WebhookSecret` is set. The webhook only triggers the same server-side check, so even a forged one cannot mark an invoice paid. The path is left out of https redirection, because ngrok forwards to http://localhost:5089.
+- **Safety nets:** a waiting checkout older than 30 minutes is checked with Safepay before it expires; the admin can press "Check with Safepay" (`POST /api/admin/online-payments/{token}/check`); `GET /api/admin/online-payments?status=&organizationId=` lists every attempt with the organization, invoice, amount, tracker and the totals received.
+- **Sandbox test card (Safepay docs):** 4456 5300 0000 1005, expiry 03/28, CVC 111 (no 3DS step).
 - **Screens:** Organization > Payments (Pay online, I paid another way, Your online payments) and the invoice page (Pay online).
+
+## Expenses, balance sheet and profit for the business owners (migration 024) - salaries and payroll are gone
+Run `FYP_DB/migrations/024_expenses_owner_payouts.sql` (`Company_Expense`, `Owner_Settlement`, `Owner_Payout`). **There is no salary, payroll, payslip, employee bank account or overtime pay in the system any more** (their endpoints, screens and the Payroll / Salaries / My Salary / Salary Status pages were removed; the old tables are left in the database untouched and unused). The only money going out is an **expense** the admin writes down. Logic: `Services/Finance/CompanyLedgerService.cs`.
+- **The money, all in PKR:** RECEIVED = every payment of the organizations (`Invoice_Payment.AmountPkr`); EXPENSES = `Company_Expense` (voided ones left out); SENT = `Owner_Payout`; **WAITING (available) = received - expenses - sent** = the profit not yet shared. Nothing is stored twice; every total is calculated.
+- **Expenses** (`AdminExpensesController`): `GET /api/admin/expenses?from&to&includeVoided&page&pageSize` (+ `totalPkr` and the balance), `POST /api/admin/expenses` `{ amount, expenseDate?, description? }` (the description is optional; the date cannot be in the future; audit `EXPENSE_ADDED`), `POST /api/admin/expenses/{id}/void` `{ reason }` (only while the expense has not been counted in a payment to the owners; audit `EXPENSE_VOIDED`).
+- **Balance sheet** (`AdminBalanceSheetController`): `GET /api/admin/balance-sheet?year=` -> `{ balance, preview, sheet: { year, years, openingPkr, months: [{ month, label, openingPkr, receivedPkr, expensesPkr, netPkr, sentToOwnersPkr, closingPkr }], totals, closingPkr }, settlements }`; `GET .../transactions?page` (payments received, expenses and money sent, newest first).
+- **Sending the profit to the owners:** `POST /api/admin/balance-sheet/send` `{ note? }` shares the whole WAITING amount **equally** between the active Business Owners (the odd paisa to the first owner; one owner gets everything). 409 when there is no owner or nothing is left (a negative balance is explained). It runs in a serializable transaction, so two admins cannot send the same money twice. Each owner gets an `Owner_Payout`, an audit entry `OWNER_PAYOUT_SENT` (their bell) and a receipt `PYT-YYYYMM-00012` (`GET /api/documents/payout/{id}`: that owner or the admin; public check `/api/verify/payout/{number}?c=CODE` shows only that it is genuine and its month). The admin's bell shows "PKR x profit is waiting" and "N invoices to verify".
+- **Business Owner** (`BusinessOwnerFinanceController`): `GET /api/business-owner/payouts` (own payouts with totals), `GET .../balance-sheet?year=`, `GET .../transactions`. Screens: Owner > My Payouts (receipts), Balance Sheet; Admin > Expenses, Balance Sheet.
+- Removed from payment rules: `OVERTIME_MULTIPLIER`, `WORKING_HOURS_PER_MONTH` (hidden, not used). Overtime records (`Overtime`) and the employee Hours page remain as hours only; the admin screen that created and approved overtime for payroll was removed.
+- **Update:** an expense can never be more than the money the company has (`received - expenses - sent`): `POST /api/admin/expenses` answers 409 with the amount that is available (checked inside a serializable transaction). `GET /api/admin/balance-sheet?year&month` and `GET /api/business-owner/balance-sheet?year&month` also return `month: { label, totalPkr, payments, byOrganization: [{ orgId, orgName, payments, amountPkr }] }` - what came in during that month and from which organization.

@@ -47,7 +47,7 @@ function EmployeeDashboardPage() {
                 You are working for <strong>{data.workingOrganization}</strong> right now.
               </>
             ) : (
-              <>You are not assigned to an organization at the moment. Your shifts, assignments and salary will appear here soon.</>
+              <>You are not assigned to an organization at the moment. Your shifts and assignments will appear here soon.</>
             )}
           </p>
         </div>

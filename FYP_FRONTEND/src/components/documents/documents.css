@@ -1,4 +1,4 @@
-/* Printable documents (invoice, receipt, statement, payslip ...). The screen shows a paper sheet; printing shows only the sheet. */
+/* Printable documents (invoice, receipt, statement, profit share receipt ...). The screen shows a paper sheet; printing shows only the sheet. */
 
 .doc-toolbar {
   display: flex;

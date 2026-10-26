@@ -16,7 +16,7 @@ import EmployeeSkillsEditor from './EmployeeSkillsEditor.jsx'
 import { AVAILABILITY_OPTIONS } from '../../../constants/employee.js'
 import { useFormFields } from '../../../hooks/useFormFields.js'
 import { validatePerson, validateSkillList } from '../../../utils/personValidation.js'
-import { onlyErrors, validateChoice, validateDate, validateNumber } from '../../../utils/validators.js'
+import { onlyErrors, validateChoice, validateDate } from '../../../utils/validators.js'
 import PersonFields from './PersonFields.jsx'
 
 function toInitialForm(employee) {
@@ -31,7 +31,6 @@ function toInitialForm(employee) {
     organizationId: employee?.organizationId ?? '',
     joiningDate: employee?.joiningDate ?? '',
     availabilityStatus: employee?.availabilityStatus ?? 'Available',
-    monthlySalary: employee?.monthlySalary ?? '',
     shiftId: employee?.currentShift?.shiftId ? String(employee.currentShift.shiftId) : '',
     skills: (employee?.skillDetails ?? []).map((skill) => ({
       skillId: skill.skillId,
@@ -48,7 +47,6 @@ function validateEmployee(form, isEdit) {
     ...onlyErrors({
       availabilityStatus: validateChoice(form.availabilityStatus, AVAILABILITY_OPTIONS, 'Availability'),
       joiningDate: validateDate(form.joiningDate, { label: 'Joining date', required: false }),
-      monthlySalary: validateNumber(form.monthlySalary, { label: 'Monthly salary', required: !isEdit, min: 1, max: 1000000000, decimals: 2, positive: true }),
       skills: validateSkillList(form.skills),
     }),
   }
@@ -91,7 +89,6 @@ function EmployeeFormModal({ employee, organizations, onClose, onSaved, onPictur
       age: form.age === '' ? undefined : Number(form.age),
       joiningDate: form.joiningDate || undefined,
       availabilityStatus: form.availabilityStatus,
-      monthlySalary: form.monthlySalary === '' ? undefined : Number(form.monthlySalary),
       skills: form.skills.map((skill) => ({
         skillId: skill.skillId,
         proficiency: skill.proficiency,
@@ -158,17 +155,6 @@ function EmployeeFormModal({ employee, organizations, onClose, onSaved, onPictur
           <SelectField label="Organization" options={organizationOptions} placeholder="Unassigned (central pool)" {...field('organizationId')} />
           <SelectField label="Availability" required options={AVAILABILITY_OPTIONS} {...field('availabilityStatus')} />
           <TextField label="Joining date" type="date" min="1960-01-01" max="2100-12-31" {...field('joiningDate')} />
-          <TextField
-            label="Monthly salary (PKR)"
-            type="number"
-            inputMode="decimal"
-            min="1"
-            max="1000000000"
-            step="0.01"
-            required={!isEdit}
-            hint={isEdit ? 'A new amount starts today. The old amount stays in the salary history.' : 'Set once when the employee is added. You can change it later.'}
-            {...field('monthlySalary')}
-          />
           <SelectField label="Shift" options={shiftOptions} placeholder="No shift" hint={shifts && shifts.length === 0 ? 'No shifts exist yet. Add one on the Shifts page.' : undefined} {...field('shiftId')} />
           <EmployeeSkillsEditor value={form.skills} onChange={(next) => setValue('skills', next)} catalog={skillCatalog} error={errors.skills} />
         </div>

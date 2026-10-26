@@ -12,7 +12,7 @@ namespace fyp_project.Controllers.OrganizationPortal
     {
         [Range(1, int.MaxValue, ErrorMessage = "Choose the invoice you want to pay.")] public int InvoiceId { get; set; }
 
-        /// <summary>Empty = the whole amount that can still be paid.</summary>
+        /// <summary>Not used any more: an invoice is always paid in full online (kept so older pages still work).</summary>
         [Range(0.01, 1000000000)] public decimal? Amount { get; set; }
     }
 
@@ -57,6 +57,17 @@ namespace fyp_project.Controllers.OrganizationPortal
             var online = await _online.FindAsync(token);
             if (online == null || online.OrgId != OrgId) return NotFound(new { message = "Payment not found." });
             return Ok(await _online.CheckoutAsync(token));
+        }
+
+        // POST api/organization/payments/online/5e0c.../confirm?cancelled=false
+        // The organization came back from the gateway's page: ask the gateway (never the browser) how it ended, then show the result.
+        [HttpPost("{token}/confirm")]
+        public async Task<IActionResult> Confirm(string token, bool cancelled = false)
+        {
+            var online = await _db.OnlinePayments.FirstOrDefaultAsync(o => o.Token == token && o.OrgId == OrgId);
+            if (online == null) return NotFound(new { message = "Payment not found." });
+            var (outcome, detail) = await _online.RefreshAsync(online, cancelled);
+            return Ok(new { outcome, detail, checkout = await _online.CheckoutAsync(token) });
         }
 
         // GET api/organization/payments/online

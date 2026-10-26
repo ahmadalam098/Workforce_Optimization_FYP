@@ -120,13 +120,11 @@ export const invoicesApi = {
   /** params: { search, status, organizationId, page, pageSize } */
   list: (params, signal) => apiRequest('/api/admin/invoices', { params, signal }),
   get: (invoiceId, signal) => apiRequest(`/api/admin/invoices/${invoiceId}`, { signal }),
-  /** body: { orgId, periodStart, periodEnd } -> lines worked out from contract rates and allocated hours (nothing saved) */
-  preview: (body) => apiRequest('/api/admin/invoices/preview', { method: 'POST', body }),
-  create: (body) => apiRequest('/api/admin/invoices', { method: 'POST', body }),
-  recalculate: (invoiceId) => apiRequest(`/api/admin/invoices/${invoiceId}/recalculate`, { method: 'POST' }),
-  addLine: (invoiceId, body) => apiRequest(`/api/admin/invoices/${invoiceId}/lines`, { method: 'POST', body }),
-  deleteLine: (invoiceId, lineId) => apiRequest(`/api/admin/invoices/${invoiceId}/lines/${lineId}`, { method: 'DELETE' }),
-  issue: (invoiceId) => apiRequest(`/api/admin/invoices/${invoiceId}/issue`, { method: 'POST' }),
+  // The admin does not create invoices: the organization manager prepares them and sends them here.
+  /** Verifies the invoice the manager sent and issues it to the organization. */
+  verify: (invoiceId) => apiRequest(`/api/admin/invoices/${invoiceId}/verify`, { method: 'POST' }),
+  /** Sends the draft back to the organization manager with a reason. */
+  sendBack: (invoiceId, reason) => apiRequest(`/api/admin/invoices/${invoiceId}/return`, { method: 'POST', body: { reason } }),
   cancel: (invoiceId, reason) => apiRequest(`/api/admin/invoices/${invoiceId}/cancel`, { method: 'POST', body: { reason } }),
   /** body: { amount, paidAt, method, reference, notes, exchangeRate } */
   recordPayment: (invoiceId, body) => apiRequest(`/api/admin/invoices/${invoiceId}/payments`, { method: 'POST', body }),
@@ -136,35 +134,6 @@ export const financeApi = {
   summary: (signal) => apiRequest('/api/admin/finance/summary', { signal }),
   /** Payment status per organization and currency */
   organizations: (signal) => apiRequest('/api/admin/finance/organizations', { signal }),
-}
-
-export const salariesApi = {
-  /** params: { search, organizationId, hasSalary, year, page, pageSize } - every item also has paidMonths and pendingMonths of that year */
-  list: (params, signal) => apiRequest('/api/admin/salaries', { params, signal }),
-  /** Month by month for one employee: { year, years, currentSalary, history, months: [{ month, status, statusLabel, ... }], summary } */
-  months: (employeeId, year, signal) => apiRequest(`/api/admin/salaries/${employeeId}/months`, { params: { year: year || undefined }, signal }),
-  history: (employeeId, signal) => apiRequest(`/api/admin/salaries/${employeeId}/history`, { signal }),
-  /** body: { monthlySalary, currency, effectiveFrom, notes } */
-  set: (employeeId, body) => apiRequest(`/api/admin/salaries/${employeeId}`, { method: 'POST', body }),
-}
-
-export const payrollApi = {
-  list: (params, signal) => apiRequest('/api/admin/payroll', { params, signal }),
-  get: (payrollId, signal) => apiRequest(`/api/admin/payroll/${payrollId}`, { signal }),
-  create: (body) => apiRequest('/api/admin/payroll', { method: 'POST', body }),
-  updateItem: (payrollId, itemId, body) => apiRequest(`/api/admin/payroll/${payrollId}/items/${itemId}`, { method: 'PUT', body }),
-  refreshOvertime: (payrollId) => apiRequest(`/api/admin/payroll/${payrollId}/refresh-overtime`, { method: 'POST' }),
-  approve: (payrollId) => apiRequest(`/api/admin/payroll/${payrollId}/approve`, { method: 'POST' }),
-  markPaid: (payrollId) => apiRequest(`/api/admin/payroll/${payrollId}/pay`, { method: 'POST' }),
-  remove: (payrollId) => apiRequest(`/api/admin/payroll/${payrollId}`, { method: 'DELETE' }),
-}
-
-export const overtimeApi = {
-  /** params: { status, year, month, search, page, pageSize } */
-  list: (params, signal) => apiRequest('/api/admin/overtime', { params, signal }),
-  create: (body) => apiRequest('/api/admin/overtime', { method: 'POST', body }),
-  approve: (overtimeId) => apiRequest(`/api/admin/overtime/${overtimeId}/approve`, { method: 'POST' }),
-  reject: (overtimeId) => apiRequest(`/api/admin/overtime/${overtimeId}/reject`, { method: 'POST' }),
 }
 
 export const paymentRulesApi = {
@@ -224,17 +193,19 @@ export const paymentsLedgerApi = {
   exportAll: (params) => apiRequest('/api/admin/payments/export', { params }),
 }
 
+/** Online payments through the payment gateway (Safepay): who paid what, and "check with the gateway" for one still waiting. */
+export const onlinePaymentsApi = {
+  /** params: { status, organizationId } -> { gateway, demo, received: [{ currency, amount, count }], items: [...] } */
+  list: (params, signal) => apiRequest('/api/admin/online-payments', { params, signal }),
+  /** -> { message, outcome } */
+  check: (token) => apiRequest(`/api/admin/online-payments/${token}/check`, { method: 'POST' }),
+}
+
 export const billingMailApi = {
   invoice: (invoiceId) => apiRequest(`/api/admin/invoices/${invoiceId}/email`, { method: 'POST' }),
   reminder: (invoiceId) => apiRequest(`/api/admin/invoices/${invoiceId}/reminder`, { method: 'POST' }),
   receipt: (paymentId) => apiRequest(`/api/admin/payments/${paymentId}/email`, { method: 'POST' }),
   statement: (params) => apiRequest('/api/admin/statements/email', { method: 'POST', params }),
-}
-
-export const employeeBankAdminApi = {
-  /** { hasBank, bankName, accountTitle, accountNumber, updatedAt } */
-  get: (employeeId, signal) => apiRequest(`/api/admin/employees/${employeeId}/bank`, { signal }),
-  save: (employeeId, body) => apiRequest(`/api/admin/employees/${employeeId}/bank`, { method: 'PUT', body }),
 }
 
 export const employeesApi = {
@@ -317,4 +288,23 @@ export const notificationsApi = {
   /** { unreadCount, items: [{ id, action, title, message, actorName, entityType, entityId, createdAt, isUnread }] } */
   feed: (limit, signal) => apiRequest('/api/admin/notifications', { params: { limit }, signal }),
   readAll: () => apiRequest('/api/admin/notifications/read-all', { method: 'POST' }),
+}
+
+/** The company's expenses (PKR). The admin writes down an amount and, if wanted, what it was for. */
+export const expensesApi = {
+  /** params: { from, to, includeVoided, page, pageSize } -> { items: [{ expenseId, expenseDate, amountPkr, description, createdBy, voided, voidReason, canVoid }], total, page, pageSize, totalPkr, balance } */
+  list: (params, signal) => apiRequest('/api/admin/expenses', { params, signal }),
+  /** body: { amount, expenseDate?, description? } */
+  add: (body) => apiRequest('/api/admin/expenses', { method: 'POST', body }),
+  /** Only while the expense has not been counted in a payment to the owners. */
+  void: (expenseId, reason) => apiRequest(`/api/admin/expenses/${expenseId}/void`, { method: 'POST', body: { reason } }),
+}
+
+/** The balance sheet and "send the profit to the business owners". */
+export const balanceSheetApi = {
+  /** year?, month? -> { month: { label, totalPkr, payments, byOrganization: [{ orgId, orgName, payments, amountPkr }] }, balance, preview: { canSend, reason, available, owners: [{ userId, name, sharePkr }] }, sheet: { year, years, months, totals, closingPkr }, settlements: [...] } */
+  get: (year, month, signal) => apiRequest('/api/admin/balance-sheet', { params: { year, month }, signal }),
+  transactions: (page, signal) => apiRequest('/api/admin/balance-sheet/transactions', { params: { page, pageSize: 15 }, signal }),
+  /** Shares everything that is left equally between the active business owners. body: { note? } */
+  send: (body) => apiRequest('/api/admin/balance-sheet/send', { method: 'POST', body }),
 }

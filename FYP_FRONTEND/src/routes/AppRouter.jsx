@@ -42,8 +42,11 @@ const ManagerCallsPage = lazy(() => import('../portals/manager/calls/ManagerCall
 const ManagerOffersPage = lazy(() => import('../portals/manager/offers/ManagerOffersPage.jsx'))
 const EmployeeAssignmentsPage = lazy(() => import('../portals/employee/assignments/EmployeeAssignmentsPage.jsx'))
 const DocumentViewerPage = lazy(() => import('../components/documents/DocumentViewerPage.jsx'))
-const ProfitStatementPage = lazy(() => import('../components/documents/ProfitStatementPage.jsx'))
+const OwnerPayoutsPage = lazy(() => import('../portals/businessOwner/finance/OwnerPayoutsPage.jsx'))
+const OwnerBalanceSheetPage = lazy(() => import('../portals/businessOwner/finance/OwnerBalanceSheetPage.jsx'))
 const DemoCheckoutPage = lazy(() => import('../portals/common/DemoCheckoutPage.jsx'))
+const GatewayReturnPage = lazy(() => import('../portals/common/GatewayReturnPage.jsx'))
+const AdminOnlinePaymentsPage = lazy(() => import('../portals/admin/finance/OnlinePaymentsPage.jsx'))
 const VerifyDocumentPage = lazy(() => import('../portals/common/VerifyDocumentPage.jsx'))
 const AdminPaymentsPage = lazy(() => import('../portals/admin/finance/PaymentsPage.jsx'))
 const AdminPaymentSubmissionsPage = lazy(() => import('../portals/admin/finance/PaymentSubmissionsPage.jsx'))
@@ -67,7 +70,6 @@ const EmployeeDashboardPage = lazy(() => import('../portals/employee/dashboard/E
 const EmployeeQueriesPage = lazy(() => import('../portals/employee/queries/EmployeeQueriesPage.jsx'))
 const EmployeeQueryDetailsPage = lazy(() => import('../portals/employee/queries/EmployeeQueryDetailsPage.jsx'))
 const EmployeeShiftsPage = lazy(() => import('../portals/employee/shifts/EmployeeShiftsPage.jsx'))
-const EmployeeSalaryPage = lazy(() => import('../portals/employee/salary/EmployeeSalaryPage.jsx'))
 const EmployeeHoursPage = lazy(() => import('../portals/employee/hours/EmployeeHoursPage.jsx'))
 const EmployeeCallsPage = lazy(() => import('../portals/employee/calls/EmployeeCallsPage.jsx'))
 const EmployeeSettingsPage = lazy(() => import('../portals/employee/settings/EmployeeSettingsPage.jsx'))
@@ -78,7 +80,6 @@ const ManagerPerformancePage = lazy(() => import('../portals/manager/performance
 const ManagerOrganizationsPage = lazy(() => import('../portals/manager/organizations/ManagerOrganizationsPage.jsx'))
 const ManagerOrganizationDetailsPage = lazy(() => import('../portals/manager/organizations/ManagerOrganizationDetailsPage.jsx'))
 const ManagerEmployeeDetailsPage = lazy(() => import('../portals/manager/employees/ManagerEmployeeDetailsPage.jsx'))
-const ManagerSalariesPage = lazy(() => import('../portals/manager/salaries/ManagerSalariesPage.jsx'))
 const ManagerRequestsPage = lazy(() => import('../portals/manager/requests/ManagerRequestsPage.jsx'))
 const ManagerRequestDetailsPage = lazy(() => import('../portals/manager/requests/ManagerRequestDetailsPage.jsx'))
 const ManagerEmployeePoolPage = lazy(() => import('../portals/manager/allocations/ManagerEmployeePoolPage.jsx'))
@@ -99,9 +100,8 @@ const AllocationHistoryPage = lazy(() => import('../portals/admin/allocations/Al
 const AvailabilityPage = lazy(() => import('../portals/admin/allocations/AvailabilityPage.jsx'))
 const InvoicesPage = lazy(() => import('../portals/admin/finance/InvoicesPage.jsx'))
 const InvoiceDetailsPage = lazy(() => import('../portals/admin/finance/InvoiceDetailsPage.jsx'))
-const SalariesPage = lazy(() => import('../portals/admin/finance/SalariesPage.jsx'))
-const PayrollPage = lazy(() => import('../portals/admin/finance/PayrollPage.jsx'))
-const PayrollDetailsPage = lazy(() => import('../portals/admin/finance/PayrollDetailsPage.jsx'))
+const ExpensesPage = lazy(() => import('../portals/admin/finance/ExpensesPage.jsx'))
+const BalanceSheetPage = lazy(() => import('../portals/admin/finance/BalanceSheetPage.jsx'))
 const PaymentRulesPage = lazy(() => import('../portals/admin/finance/PaymentRulesPage.jsx'))
 const TicketsPage = lazy(() => import('../portals/admin/queries/TicketsPage.jsx'))
 const TicketDetailsPage = lazy(() => import('../portals/admin/queries/TicketDetailsPage.jsx'))
@@ -155,9 +155,8 @@ function AppRouter() {
 
             <Route path="invoices" element={<InvoicesPage />} />
             <Route path="invoices/:invoiceId" element={<InvoiceDetailsPage />} />
-            <Route path="salaries" element={<SalariesPage />} />
-            <Route path="payroll" element={<PayrollPage />} />
-            <Route path="payroll/:payrollId" element={<PayrollDetailsPage />} />
+            <Route path="expenses" element={<ExpensesPage />} />
+            <Route path="balance-sheet" element={<BalanceSheetPage />} />
             <Route path="payment-rules" element={<PaymentRulesPage />} />
             <Route path="tickets" element={<TicketsPage />} />
             <Route path="tickets/:ticketId" element={<TicketDetailsPage />} />
@@ -166,11 +165,11 @@ function AppRouter() {
             <Route path="review-requests" element={<ReviewRequestsPage />} />
             <Route path="payments" element={<AdminPaymentsPage />} />
             <Route path="payment-submissions" element={<AdminPaymentSubmissionsPage />} />
+            <Route path="online-payments" element={<AdminOnlinePaymentsPage />} />
             <Route path="statements" element={<AdminStatementsPage />} />
             <Route path="documents/invoice/:id" element={<DocumentViewerPage kind="invoice" backTo={(id) => `/admin/invoices/${id}`} backLabel="Back to the invoice" emailAction={{ label: 'Email to the organization', run: (id) => billingMailApi.invoice(id) }} />} />
             <Route path="documents/receipt/:id" element={<DocumentViewerPage kind="receipt" backTo={(id, doc) => (doc ? `/admin/invoices/${doc.invoice.invoiceId}` : '/admin/payments')} backLabel="Back to the invoice" emailAction={{ label: 'Email receipt', run: (id) => billingMailApi.receipt(id) }} />} />
-            <Route path="documents/payslip/:id" element={<DocumentViewerPage kind="payslip" backTo="/admin/payroll" backLabel="Back to Payroll" />} />
-            <Route path="documents/payroll/:id" element={<DocumentViewerPage kind="payroll" backTo={(id) => `/admin/payroll/${id}`} backLabel="Back to the payroll" />} />
+            <Route path="documents/payout/:id" element={<DocumentViewerPage kind="payout" backTo="/admin/balance-sheet" backLabel="Back to the Balance Sheet" />} />
             <Route path="requests" element={<StaffRequestsPage />} />
             <Route path="requests/:requestId" element={<StaffRequestDetailsPage />} />
             <Route path="settings" element={<SettingsPage />} />
@@ -186,9 +185,6 @@ function AppRouter() {
             <Route path="tickets/new" element={<NewItemPage type="ticket" />} />
             <Route path="payment-rules/new" element={<NewItemPage type="payment-rule" />} />
             <Route path="payment-rules/new-rate" element={<NewItemPage type="exchange-rate" />} />
-            <Route path="payroll/new" element={<NewItemPage type="payroll" />} />
-            <Route path="payroll/new-overtime" element={<NewItemPage type="overtime" />} />
-            <Route path="invoices/new" element={<NewItemPage type="invoice" />} />
           </Route>
         </Route>
 
@@ -202,12 +198,10 @@ function AppRouter() {
             <Route path="statements" element={<ManagerStatementsPage />} />
             <Route path="documents/invoice/:id" element={<DocumentViewerPage kind="invoice" backTo={(id) => `/manager/invoices/${id}`} backLabel="Back to the invoice" />} />
             <Route path="documents/receipt/:id" element={<DocumentViewerPage kind="receipt" backTo={(id, doc) => (doc ? `/manager/invoices/${doc.invoice.invoiceId}` : '/manager/payments')} backLabel="Back to the invoice" />} />
-            <Route path="documents/payslip/:id" element={<DocumentViewerPage kind="payslip" backTo="/manager/salaries" backLabel="Back to Salary Status" />} />
             <Route path="reviews" element={<ManagerReviewsPage />} />
             <Route path="reviews/:reviewId" element={<ManagerReviewDetailsPage />} />
             <Route path="requests" element={<ManagerRequestsPage />} />
             <Route path="requests/:requestId" element={<ManagerRequestDetailsPage />} />
-            <Route path="salaries" element={<ManagerSalariesPage />} />
             <Route path="employees/:employeeId" element={<ManagerEmployeeDetailsPage />} />
             <Route path="minimum-staff" element={<ManagerMinimumStaffPage />} />
             <Route path="organizations" element={<ManagerOrganizationsPage />} />
@@ -230,10 +224,8 @@ function AppRouter() {
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<EmployeeDashboardPage />} />
             <Route path="shifts" element={<EmployeeShiftsPage />} />
-            <Route path="salary" element={<EmployeeSalaryPage />} />
             <Route path="hours" element={<EmployeeHoursPage />} />
             <Route path="calls" element={<EmployeeCallsPage />} />
-            <Route path="documents/payslip/:id" element={<DocumentViewerPage kind="payslip" backTo="/employee/salary" backLabel="Back to My Salary" />} />
             <Route path="assignments" element={<EmployeeAssignmentsPage />} />
             <Route path="settings" element={<EmployeeSettingsPage />} />
             <Route path="queries" element={<EmployeeQueriesPage />} />
@@ -246,7 +238,9 @@ function AppRouter() {
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<OwnerDashboardPage />} />
             <Route path="employees" element={<OwnerEmployeesPage />} />
-            <Route path="statements" element={<ProfitStatementPage backTo="/owner/dashboard" backLabel="Back to the dashboard" />} />
+            <Route path="payouts" element={<OwnerPayoutsPage />} />
+            <Route path="balance-sheet" element={<OwnerBalanceSheetPage />} />
+            <Route path="documents/payout/:id" element={<DocumentViewerPage kind="payout" backTo="/owner/payouts" backLabel="Back to My Payouts" />} />
             <Route path="settings" element={<OwnerSettingsPage />} />
           </Route>
         </Route>
@@ -276,6 +270,8 @@ function AppRouter() {
 
         <Route path="/verify/:kind/:number" element={<VerifyDocumentPage />} />
         <Route path="/pay/demo/:token" element={<DemoCheckoutPage />} />
+        <Route path="/pay/safepay/return/:token" element={<GatewayReturnPage />} />
+        <Route path="/pay/safepay/cancel/:token" element={<GatewayReturnPage cancelled />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Suspense>

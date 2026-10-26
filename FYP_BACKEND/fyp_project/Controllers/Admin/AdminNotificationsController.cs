@@ -50,10 +50,12 @@ namespace fyp_project.Controllers.Admin
     public class AdminNotificationsController : AdminControllerBase
     {
         private readonly WorkforceManagementDbContext _db;
+        private readonly CompanyLedgerService _ledger;
 
-        public AdminNotificationsController(WorkforceManagementDbContext db)
+        public AdminNotificationsController(WorkforceManagementDbContext db, CompanyLedgerService ledger)
         {
             _db = db;
+            _ledger = ledger;
         }
 
         /// <summary>"EMPLOYEE_CREATED" -> "Employee created".</summary>
@@ -121,6 +123,32 @@ namespace fyp_project.Controllers.Admin
                     Title = $"{waiting.Count} payment{(waiting.Count == 1 ? string.Empty : "s")} to approve",
                     Message = verified > 0 ? $"{verified} already verified by the organization manager." : "Organizations say they paid. Check and approve them.",
                     Link = "/admin/payment-submissions",
+                });
+            }
+
+            // Invoices the organization managers sent for verification.
+            var toVerify = await SafeQuery.IfSchemaMissing(() => _db.Invoices.AsNoTracking().Where(i => i.Status == InvoiceService.Draft && i.SubmittedAt != null).Select(i => i.InvoiceId).ToListAsync(), null);
+            if (toVerify is { Count: > 0 })
+            {
+                alerts.Insert(0, new NotificationAlertDto
+                {
+                    Key = $"invoices-to-verify-{toVerify.Count}-{toVerify.Max()}",
+                    Title = $"{toVerify.Count} invoice{(toVerify.Count == 1 ? string.Empty : "s")} to verify",
+                    Message = "Organization managers prepared them. Check each one and verify it, or send it back.",
+                    Link = "/admin/invoices?status=PendingVerification",
+                });
+            }
+
+            // Profit that is waiting to be shared with the business owners.
+            var balance = await SafeQuery.IfSchemaMissing(async () => await _ledger.BalanceAsync(), null);
+            if (balance is { Available: > 0 })
+            {
+                alerts.Add(new NotificationAlertDto
+                {
+                    Key = $"profit-waiting-{(long)balance.Available}",
+                    Title = $"PKR {balance.Available:N0} profit is waiting",
+                    Message = "Nobody has been sent this money yet. Send it to the business owners from the Balance Sheet.",
+                    Link = "/admin/balance-sheet",
                 });
             }
 

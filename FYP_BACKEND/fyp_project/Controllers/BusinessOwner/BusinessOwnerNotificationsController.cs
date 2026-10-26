@@ -9,10 +9,9 @@ using Microsoft.EntityFrameworkCore;
 namespace fyp_project.Controllers.BusinessOwnerPortal
 {
     /// <summary>
-    /// Business Owner portal: the notification bell. Only what changes the money figures: revenue added (a payment from an organization was
-    /// recorded) and expense added (a payroll was approved), each with what it does to the profit. Every owner has their own read marker
-    /// (the same table the other bells use). Revenue and expense can only grow in the system today (a payment or an approved payroll is never
-    /// taken back); when a removal exists, add its audit action to <see cref="RevenueRemoved"/> or <see cref="ExpenseRemoved"/>.
+    /// Business Owner portal: the notification bell. Only what changes the money: revenue added (a payment from an organization was recorded),
+    /// an expense added or voided by the admin, and - addressed to this owner only - the profit share the admin sent (with a link to the receipt).
+    /// Every owner has their own read marker (the same table the other bells use).
     /// </summary>
     [ApiController]
     [Authorize(Policy = "BusinessOwnerOnly")]
@@ -20,10 +19,9 @@ namespace fyp_project.Controllers.BusinessOwnerPortal
     [Route("api/business-owner/notifications")]
     public class BusinessOwnerNotificationsController : ControllerBase
     {
-        private static readonly string[] RevenueAdded = { "INVOICE_PAYMENT_RECORDED" };
-        private static readonly string[] RevenueRemoved = Array.Empty<string>();
-        private static readonly string[] ExpenseAdded = { "PAYROLL_APPROVED" };
-        private static readonly string[] ExpenseRemoved = Array.Empty<string>();
+        private static readonly string[] RevenueActions = { "INVOICE_PAYMENT_RECORDED" };
+        private static readonly string[] ExpenseActions = { "EXPENSE_ADDED", "EXPENSE_VOIDED" };
+        private const string PayoutAction = "OWNER_PAYOUT_SENT";
 
         private readonly WorkforceManagementDbContext _db;
 
@@ -48,7 +46,7 @@ namespace fyp_project.Controllers.BusinessOwnerPortal
         private static string ProfitSentence(decimal delta) =>
             delta >= 0 ? $"Profit increased by {Pkr(delta)}." : $"Profit decreased by {Pkr(-delta)}.";
 
-        /// <summary>Title and text of one entry, with the amount worked out from the payment or payroll it is about.</summary>
+        /// <summary>Title and text of one entry, with the amount worked out from the payment, expense or payout it is about.</summary>
         private async Task<(string Title, string Message)> DescribeAsync(AuditLog entry)
         {
             var id = int.TryParse(entry.EntityId, out var parsed) ? parsed : 0;
@@ -61,20 +59,35 @@ namespace fyp_project.Controllers.BusinessOwnerPortal
                     .OrderBy(p => Math.Abs((p.CreatedAt - entry.CreatedAt).TotalSeconds)).FirstOrDefault();
                 var who = invoice?.Org ?? "An organization";
                 if (payment == null) return ("Revenue added", $"{who} paid {invoice?.InvoiceNumber}.");
-                var sign = RevenueRemoved.Contains(entry.Action) ? -1 : 1;
-                return (sign > 0 ? "Revenue added" : "Revenue removed", $"{who} paid {Pkr(payment.AmountPkr)} for {invoice?.InvoiceNumber}. {ProfitSentence(sign * payment.AmountPkr)}");
+                return ("Revenue added", $"{who} paid {Pkr(payment.AmountPkr)} for {invoice?.InvoiceNumber}. {ProfitSentence(payment.AmountPkr)}");
             }
 
-            var run = await _db.PayrollRuns.AsNoTracking().Where(r => r.PayrollId == id).Select(r => new { r.PeriodMonth, r.PeriodYear, r.TotalPkr }).FirstOrDefaultAsync();
-            if (run == null) return ("Expense added", "A payroll was approved.");
-            var direction = ExpenseRemoved.Contains(entry.Action) ? -1 : 1;
-            return (direction > 0 ? "Expense added" : "Expense removed", $"Payroll {run.PeriodMonth:00}/{run.PeriodYear} approved: {Pkr(run.TotalPkr)}. {ProfitSentence(-direction * run.TotalPkr)}");
+            if (entry.EntityType == "Expense")
+            {
+                var expense = await _db.CompanyExpenses.AsNoTracking().FirstOrDefaultAsync(e => e.ExpenseId == id);
+                if (expense == null) return ("Expense", "An expense was written down.");
+                var text = string.IsNullOrWhiteSpace(expense.Description) ? string.Empty : $" ({expense.Description})";
+                return entry.Action == "EXPENSE_VOIDED"
+                    ? ("Expense removed", $"An expense of {Pkr(expense.AmountPkr)}{text} was taken back. {ProfitSentence(expense.AmountPkr)}")
+                    : ("Expense added", $"The admin wrote down an expense of {Pkr(expense.AmountPkr)}{text}. {ProfitSentence(-expense.AmountPkr)}");
+            }
+
+            // Payout: this owner's own share.
+            var payout = await _db.OwnerPayouts.AsNoTracking().Include(p => p.Settlement).FirstOrDefaultAsync(p => p.PayoutId == id);
+            if (payout?.Settlement == null) return ("Profit sent to you", entry.Details ?? "The admin sent you your share of the profit.");
+            var month = CompanyLedgerService.MonthLabel(payout.Settlement.PeriodYear, payout.Settlement.PeriodMonth);
+            return ("Profit sent to you", $"The admin sent you {Pkr(payout.AmountPkr)}, your share of the profit for {month} ({DocumentCodes.PayoutNumber(payout.Settlement.PeriodYear, payout.Settlement.PeriodMonth, payout.PayoutId)}). Open the receipt.");
         }
 
-        private IQueryable<AuditLog> Relevant() =>
-            _db.AuditLogs.AsNoTracking().Where(a =>
-                (a.EntityType == "Invoice" && (RevenueAdded.Contains(a.Action) || RevenueRemoved.Contains(a.Action))) ||
-                (a.EntityType == "Payroll" && (ExpenseAdded.Contains(a.Action) || ExpenseRemoved.Contains(a.Action))));
+        private async Task<IQueryable<AuditLog>> RelevantAsync(int me)
+        {
+            var myPayouts = (await SafeQuery.IfSchemaMissing(() => _db.OwnerPayouts.AsNoTracking().Where(p => p.OwnerUserId == me).Select(p => p.PayoutId).ToListAsync(), null) ?? new())
+                .Select(i => i.ToString()).ToList();
+            return _db.AuditLogs.AsNoTracking().Where(a =>
+                (a.EntityType == "Invoice" && RevenueActions.Contains(a.Action)) ||
+                (a.EntityType == "Expense" && ExpenseActions.Contains(a.Action)) ||
+                (a.EntityType == "Payout" && a.Action == PayoutAction && myPayouts.Contains(a.EntityId!)));
+        }
 
         // GET api/business-owner/notifications?limit=20
         [HttpGet]
@@ -103,7 +116,7 @@ namespace fyp_project.Controllers.BusinessOwnerPortal
             }
 
             var lastRead = state.LastReadAuditId;
-            var relevant = Relevant();
+            var relevant = await RelevantAsync(me.Value);
             var unread = await relevant.CountAsync(a => a.AuditId > lastRead);
             var rows = await relevant.OrderByDescending(a => a.AuditId).Take(limit).ToListAsync();
 

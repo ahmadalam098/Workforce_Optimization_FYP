@@ -65,13 +65,16 @@ namespace fyp_project.Services
             }).ToList();
         }
 
-        /// <summary>What an organization may still announce for an invoice: the balance minus the submissions that are still waiting.</summary>
-        public async Task<decimal> PayableAsync(Invoice invoice)
+        /// <summary>
+        /// What an organization may still pay for an invoice: the balance minus the submissions that are still waiting. countOnline = false leaves out
+        /// unfinished online checkouts (a new online attempt replaces them, so the organization can always pay the whole balance online).
+        /// </summary>
+        public async Task<decimal> PayableAsync(Invoice invoice, bool countOnline = true)
         {
             var open = await _db.PaymentSubmissions.Where(s => s.InvoiceId == invoice.InvoiceId && (s.Status == PaymentSubmission.Pending || s.Status == PaymentSubmission.Verified)).SumAsync(s => (decimal?)s.Amount) ?? 0m;
             // Checkouts that are still open at the payment gateway also reserve their amount.
             var limit = DateTime.UtcNow - OnlinePaymentService.CheckoutLifetime;
-            var online = await _db.OnlinePayments.Where(o => o.InvoiceId == invoice.InvoiceId && o.Status == OnlinePayment.Created && o.CreatedAt >= limit).SumAsync(o => (decimal?)o.Amount) ?? 0m;
+            var online = !countOnline ? 0m : await _db.OnlinePayments.Where(o => o.InvoiceId == invoice.InvoiceId && o.Status == OnlinePayment.Created && o.CreatedAt >= limit).SumAsync(o => (decimal?)o.Amount) ?? 0m;
             return Math.Max(0, invoice.TotalAmount - invoice.PaidAmount - open - online);
         }
 

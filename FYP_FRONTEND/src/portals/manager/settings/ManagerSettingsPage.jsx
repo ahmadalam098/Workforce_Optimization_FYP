@@ -227,7 +227,7 @@ const CATEGORIES = [
   ['requests', 'Staff requests', 'New, approved, rejected or cancelled requests of your organizations.'],
   ['queries', 'Queries and complaints', 'New ones, and when the admin or you resolve one.'],
   ['invoices', 'Invoices and payments', 'An invoice is issued or cancelled, or a payment is recorded.'],
-  ['employees', 'Employees', 'Allocations, changes to your employees, shifts, skills, overtime and payroll.'],
+  ['employees', 'Employees', 'Allocations, changes to your employees, shifts and skills.'],
   ['chat', 'Chat messages', 'New messages from your organizations.'],
   ['expiry', 'Contract expiry', 'A contract of your organizations is about to end.'],
 ]

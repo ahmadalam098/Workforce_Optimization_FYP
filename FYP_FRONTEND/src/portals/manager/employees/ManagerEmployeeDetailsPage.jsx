@@ -4,66 +4,12 @@ import Badge from '../../../components/ui/Badge.jsx'
 import Icon from '../../../components/ui/Icon.jsx'
 import Spinner from '../../../components/ui/Spinner.jsx'
 import { useFetch } from '../../../hooks/useFetch.js'
-import { managerInfoApi, managerSalariesApi } from '../../../services/manager/managerService.js'
-import { SalaryStatusBadge } from '../salaries/SalaryStatusBadge.jsx'
-import { MONTH_OPTIONS } from '../../../constants/billing.js'
-import { formatCurrency, formatDate, formatDateTime, humanize } from '../../../utils/format.js'
+import { managerInfoApi } from '../../../services/manager/managerService.js'
+import { formatDate, formatDateTime, humanize } from '../../../utils/format.js'
 import { PriorityBadge, TicketStatusBadge } from '../../admin/queries/TicketBadges.jsx'
 import '../../admin/dashboard/AdminDashboardPage.css'
 import { EmptyState, ErrorState } from '../../admin/shared/StateBox.jsx'
 import { AvailabilityBadge } from '../../admin/shared/StatusBadge.jsx'
-
-/** The salary and the last 12 months of payroll status of one of my own employees. */
-function SalaryCard({ employeeId }) {
-  const { data, error, loading, reload } = useFetch((signal) => managerSalariesApi.employee(employeeId, signal), `manager-salary-${employeeId}`)
-  const monthName = (month) => MONTH_OPTIONS.find((option) => option.value === String(month))?.label ?? month
-
-  return (
-    <section className="card">
-      <div className="card__header">
-        <h3 className="card__title">Salary status</h3>
-      </div>
-      {error && !data ? (
-        <ErrorState error={error} onRetry={reload} />
-      ) : !data && loading ? (
-        <Spinner label="Loading salary..." />
-      ) : (
-        <>
-          <p className="card__body">
-            Monthly salary: <strong>{data.monthlySalary != null ? formatCurrency(data.monthlySalary, data.currency || 'PKR') : 'not set yet'}</strong>
-            {data.since && <span className="cell-muted"> (since {formatDate(data.since)})</span>}
-          </p>
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Month</th>
-                  <th>Status</th>
-                  <th className="num">Amount</th>
-                  <th>Paid on</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.months.map((row) => (
-                  <tr key={`${row.year}-${row.month}`}>
-                    <td>
-                      {monthName(row.month)} {row.year}
-                    </td>
-                    <td>
-                      <SalaryStatusBadge status={row.status} label={row.statusLabel} />
-                    </td>
-                    <td className="num">{row.totalAmount != null ? formatCurrency(row.totalAmount, row.currency || 'PKR') : <span className="cell-muted">—</span>}</td>
-                    <td className="cell-muted">{row.paidAt ? formatDate(row.paidAt) : '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-    </section>
-  )
-}
 
 function InfoItem({ label, children }) {
   return (
@@ -74,7 +20,7 @@ function InfoItem({ label, children }) {
   )
 }
 
-/** Organization Manager: one employee - where they work, skills, shift, history with my organizations, and their queries. Never CNIC or passwords; the salary card is shown only for my own employees. */
+/** Organization Manager: one employee - where they work, skills, shift, history with my organizations, and their queries. Never CNIC or passwords. */
 function ManagerEmployeeDetailsPage() {
   const { employeeId } = useParams()
   const { data: employee, error, loading, reload } = useFetch((signal) => managerInfoApi.employee(employeeId, signal), `manager-employee-${employeeId}`)
@@ -154,8 +100,6 @@ function ManagerEmployeeDetailsPage() {
           )}
         </section>
       </div>
-
-      {employee.isMine && <SalaryCard employeeId={employee.employeeId} />}
 
       <section className="card">
         <div className="card__header">

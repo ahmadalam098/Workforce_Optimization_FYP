@@ -45,7 +45,7 @@ function PaymentRulesPage() {
     <div className="page">
       <PageHeader
         title="Payment Rules"
-        description="How invoices are due, how overtime is paid, and the rates used to convert currencies to PKR."
+        description="How invoices are due and the rates used to convert currencies to PKR."
         actions={
           tab === 'rules' ? (
             <Button onClick={() => navigate('/admin/payment-rules/new')}>

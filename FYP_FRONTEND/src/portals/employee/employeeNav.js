@@ -10,7 +10,6 @@ export const EMPLOYEE_NAV_SECTIONS = [
       { label: 'My Shifts', icon: 'clock', to: '/employee/shifts', ready: true },
       { label: 'My Hours', icon: 'activity', to: '/employee/hours', ready: true },
       { label: 'My Assignments', icon: 'building', to: '/employee/assignments', ready: true },
-      { label: 'My Salary', icon: 'chart', to: '/employee/salary', ready: true },
     ],
   },
   {

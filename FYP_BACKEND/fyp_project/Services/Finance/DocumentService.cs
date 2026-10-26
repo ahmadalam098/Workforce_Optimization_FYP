@@ -10,10 +10,10 @@ namespace fyp_project.Services
     {
         public const string Invoice = "invoice";
         public const string Receipt = "receipt";
-        public const string Payslip = "payslip";
+        public const string Payout = "payout";
 
         public static string ReceiptNumber(InvoicePayment payment) => $"RCP-{payment.PaidAt:yyyy}-{payment.PaymentId:D5}";
-        public static string PayslipNumber(PayrollRun run, PayrollItem item) => $"SLP-{run.PeriodYear}{run.PeriodMonth:D2}-{item.ItemId:D5}";
+        public static string PayoutNumber(int year, int month, int payoutId) => $"PYT-{year}{month:D2}-{payoutId:D5}";
         public static string StatementNumber(int orgId, DateOnly from, DateOnly to) => $"STM-{orgId:D4}-{from:yyyyMMdd}-{to:yyyyMMdd}";
     }
 
@@ -240,126 +240,37 @@ namespace fyp_project.Services
                 .ToList();
         }
 
-        // ---------------------------------------------------------------- payslip and payroll sheet
+        // ---------------------------------------------------------------- the profit sent to a business owner (receipt)
 
-        private static string Mask(string? account) => string.IsNullOrEmpty(account) ? string.Empty : account.Length <= 4 ? account : new string('•', Math.Min(8, account.Length - 4)) + account[^4..];
-
-        public async Task<object> PayslipAsync(PayrollRun run, PayrollItem item)
+        /// <summary>The receipt of one owner's share: what the company received, what it spent, what was sent in total, and this owner's part.</summary>
+        public async Task<object> PayoutAsync(OwnerPayout payout)
         {
-            var employee = await _db.Employees.AsNoTracking().Where(e => e.EmpId == item.EmpId)
-                .Select(e => new { e.EmpId, Name = e.User!.Name, Home = e.Org != null ? e.Org.OrgName : null, e.JoiningDate }).FirstOrDefaultAsync();
-            var bank = await _db.EmployeeBanks.AsNoTracking().FirstOrDefaultAsync(b => b.EmpId == item.EmpId);
-            var number = DocumentCodes.PayslipNumber(run, item);
-            var month = new DateTime(run.PeriodYear, run.PeriodMonth, 1);
-
+            var settlement = await _db.OwnerSettlements.AsNoTracking().FirstAsync(s => s.SettlementId == payout.SettlementId);
+            var owner = await _db.Users.AsNoTracking().Where(u => u.UserId == payout.OwnerUserId).Select(u => new { u.UserId, u.Name, u.Email }).FirstOrDefaultAsync();
+            var sentBy = settlement.SettledBy == null ? null : await _db.Users.AsNoTracking().Where(u => u.UserId == settlement.SettledBy).Select(u => u.Name).FirstOrDefaultAsync();
+            var number = DocumentCodes.PayoutNumber(settlement.PeriodYear, settlement.PeriodMonth, payout.PayoutId);
             return new
             {
-                kind = DocumentCodes.Payslip,
+                kind = DocumentCodes.Payout,
                 number,
-                title = "Salary slip",
-                period = new { year = run.PeriodYear, month = run.PeriodMonth, label = month.ToString("MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture) },
-                status = run.Status,
-                paidAt = run.PaidAt,
-                employee = new { employeeId = employee?.EmpId, code = $"EMP-{item.EmpId:D3}", name = employee?.Name, organization = employee?.Home, joiningDate = employee?.JoiningDate },
-                bank = bank == null ? null : new { bank.BankName, bank.AccountTitle, account = Mask(bank.AccountNumber) },
-                currency = item.Currency,
-                baseSalary = item.BaseSalary,
-                overtimeHours = item.OvertimeHours,
-                overtimeAmount = item.OvertimeAmount,
-                adjustment = item.Adjustment,
-                adjustmentNote = item.AdjustmentNote,
-                total = item.TotalAmount,
-                amountInWords = AmountInWords.Of(item.TotalAmount, item.Currency),
-                exchangeRate = item.Currency == ExchangeRateService.Pkr ? (decimal?)null : item.ExchangeRate,
-                totalPkr = item.TotalPkr,
-                letterhead = await LetterheadAsync(),
-                verify = Verify(DocumentCodes.Payslip, number, item.ItemId, item.TotalAmount),
-            };
-        }
-
-        public async Task<object> PayrollSheetAsync(PayrollRun run)
-        {
-            var items = await _db.PayrollItems.AsNoTracking().Where(i => i.PayrollId == run.PayrollId).OrderBy(i => i.EmpId).ToListAsync();
-            var empIds = items.Select(i => i.EmpId).ToList();
-            var names = await _db.Employees.AsNoTracking().Where(e => empIds.Contains(e.EmpId)).Select(e => new { e.EmpId, Name = e.User!.Name }).ToDictionaryAsync(e => e.EmpId, e => e.Name);
-            var banks = await _db.EmployeeBanks.AsNoTracking().Where(b => empIds.Contains(b.EmpId)).ToDictionaryAsync(b => b.EmpId);
-            var month = new DateTime(run.PeriodYear, run.PeriodMonth, 1);
-
-            return new
-            {
-                kind = "payroll",
-                number = $"PAY-{run.PeriodYear}{run.PeriodMonth:D2}-{run.PayrollId:D3}",
-                title = "Payroll sheet",
-                period = new { year = run.PeriodYear, month = run.PeriodMonth, label = month.ToString("MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture) },
-                status = run.Status,
-                paidAt = run.PaidAt,
-                missingBank = items.Count(i => !banks.ContainsKey(i.EmpId)),
-                items = items.Select(i => new
+                title = "Profit share receipt",
+                period = CompanyLedgerService.MonthLabel(settlement.PeriodYear, settlement.PeriodMonth),
+                sentAt = settlement.SettledAt,
+                sentBy,
+                owner = new { userId = owner?.UserId, name = owner?.Name, email = owner?.Email },
+                amountPkr = payout.AmountPkr,
+                amountInWords = AmountInWords.Of(payout.AmountPkr, "PKR"),
+                owners = settlement.OwnerCount,
+                company = new
                 {
-                    itemId = i.ItemId,
-                    employeeId = i.EmpId,
-                    name = names.GetValueOrDefault(i.EmpId),
-                    bankName = banks.TryGetValue(i.EmpId, out var b) ? b.BankName : null,
-                    accountTitle = b?.AccountTitle,
-                    accountNumber = b?.AccountNumber,
-                    currency = i.Currency,
-                    baseSalary = i.BaseSalary,
-                    adjustment = i.Adjustment,
-                    total = i.TotalAmount,
-                    totalPkr = i.TotalPkr,
-                }),
-                totalPkr = items.Sum(i => i.TotalPkr),
+                    receivedPkr = settlement.ReceivedPkr,
+                    expensesPkr = settlement.ExpensesPkr,
+                    alreadySentPkr = settlement.PreviouslySentPkr,
+                    sharedNowPkr = settlement.AmountPkr,
+                },
+                note = settlement.Note,
                 letterhead = await LetterheadAsync(),
-            };
-        }
-
-        // ---------------------------------------------------------------- profit statement (owners)
-
-        public async Task<object> ProfitAsync(DateOnly from, DateOnly to)
-        {
-            var rangeStart = from.ToDateTime(TimeOnly.MinValue);
-            var rangeEnd = to.AddDays(1).ToDateTime(TimeOnly.MinValue);
-            var payments = await _db.InvoicePayments.AsNoTracking().Where(p => p.PaidAt >= rangeStart && p.PaidAt < rangeEnd).Select(p => new { p.PaidAt, p.AmountPkr }).ToListAsync();
-            var firstKey = from.Year * 12 + from.Month;
-            var lastKey = to.Year * 12 + to.Month;
-            var runs = await _db.PayrollRuns.AsNoTracking().Where(r => (r.Status == "Approved" || r.Status == "Paid") && r.PeriodYear * 12 + r.PeriodMonth >= firstKey && r.PeriodYear * 12 + r.PeriodMonth <= lastKey)
-                .Select(r => new { r.PeriodYear, r.PeriodMonth, r.TotalPkr }).ToListAsync();
-
-            var months = new List<object>();
-            for (var m = new DateOnly(from.Year, from.Month, 1); m <= new DateOnly(to.Year, to.Month, 1); m = m.AddMonths(1))
-            {
-                var revenue = payments.Where(p => p.PaidAt.Year == m.Year && p.PaidAt.Month == m.Month).Sum(p => p.AmountPkr);
-                var expense = runs.Where(r => r.PeriodYear == m.Year && r.PeriodMonth == m.Month).Sum(r => r.TotalPkr);
-                months.Add(new { year = m.Year, month = m.Month, label = m.ToDateTime(TimeOnly.MinValue).ToString("MMM yyyy", System.Globalization.CultureInfo.InvariantCulture), revenuePkr = revenue, expensePkr = expense, profitPkr = revenue - expense });
-            }
-
-            var revenueTotal = payments.Sum(p => p.AmountPkr);
-            var expenseTotal = runs.Sum(r => r.TotalPkr);
-            var profit = revenueTotal - expenseTotal;
-            var ownerRoleIds = await _db.Roles.AsNoTracking().Where(r => r.RoleType == "Business Owner").Select(r => r.RoleId).ToListAsync();
-            var owners = await _db.Users.AsNoTracking().Where(u => u.IsActive == true && u.RoleId != null && ownerRoleIds.Contains(u.RoleId.Value)).OrderBy(u => u.UserId).Select(u => new { u.UserId, u.Name }).ToListAsync();
-            var shares = new List<object>();
-            if (owners.Count > 0)
-            {
-                var each = profit > 0 ? Math.Floor(profit / owners.Count * 100m) / 100m : 0m;
-                var remainder = profit > 0 ? profit - each * owners.Count : 0m;
-                for (var i = 0; i < owners.Count; i++) shares.Add(new { name = owners[i].Name, sharePkr = each + (i == 0 ? remainder : 0m) });
-            }
-
-            return new
-            {
-                kind = "profit",
-                number = $"PRF-{from:yyyyMMdd}-{to:yyyyMMdd}",
-                title = "Profit statement",
-                from,
-                to,
-                generatedAt = DateTime.UtcNow,
-                revenuePkr = revenueTotal,
-                expensePkr = expenseTotal,
-                profitPkr = profit,
-                months,
-                owners = shares,
-                letterhead = await LetterheadAsync(),
+                verify = Verify(DocumentCodes.Payout, number, payout.PayoutId, payout.AmountPkr),
             };
         }
     }

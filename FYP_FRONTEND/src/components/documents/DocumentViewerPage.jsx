@@ -8,19 +8,17 @@ import { documentsApi } from '../../services/documents/documentsService.js'
 import { ErrorState } from '../../portals/admin/shared/StateBox.jsx'
 import DocumentFrame from './DocumentFrame.jsx'
 import InvoiceDocument from './InvoiceDocument.jsx'
-import PayrollSheetDocument from './PayrollSheetDocument.jsx'
-import PayslipDocument from './PayslipDocument.jsx'
+import PayoutDocument from './PayoutDocument.jsx'
 import ReceiptDocument from './ReceiptDocument.jsx'
 
 const KINDS = {
   invoice: { load: documentsApi.invoice, Component: InvoiceDocument, slip: true },
   receipt: { load: documentsApi.receipt, Component: ReceiptDocument, slip: true },
-  payslip: { load: documentsApi.payslip, Component: PayslipDocument, slip: true },
-  payroll: { load: documentsApi.payroll, Component: PayrollSheetDocument, slip: false },
+  payout: { load: documentsApi.payout, Component: PayoutDocument, slip: true },
 }
 
 /**
- * One document of the page's :id (invoice, receipt, payslip or payroll sheet) in a printable sheet. Every portal uses it with its own back link;
+ * One document of the page's :id (invoice, receipt or profit share receipt) in a printable sheet. Every portal uses it with its own back link;
  * `emailAction` (admin) is an optional button that emails the document to the organization.
  */
 function DocumentViewerPage({ kind, backTo, backLabel, emailAction }) {

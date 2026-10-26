@@ -110,7 +110,6 @@ namespace fyp_project.Controllers.Admin
 
             await AttachSkillsAndShiftAsync(items);
             await AttachWorkingOrgAsync(items);
-            await AttachSalaryAsync(items);
 
             return Ok(new PagedResult<EmployeeListItemDto>
             {
@@ -119,70 +118,6 @@ namespace fyp_project.Controllers.Admin
                 Page = page,
                 PageSize = pageSize,
             });
-        }
-
-        /// <summary>Adds the monthly salary that is paid now (the open salary record) to each employee.</summary>
-        private async Task AttachSalaryAsync(List<EmployeeListItemDto> items)
-        {
-            if (items.Count == 0) return;
-            var ids = items.Select(i => i.EmployeeId).ToList();
-            var salaries = await SafeQuery.IfSchemaMissing(
-                async () => await _db.SalaryStructures.AsNoTracking()
-                    .Where(s => s.EffectiveTo == null && ids.Contains(s.EmpId))
-                    .Select(s => new { s.EmpId, s.MonthlySalary, s.Currency, s.EffectiveFrom })
-                    .ToListAsync(),
-                null);
-            if (salaries == null) return;
-
-            foreach (var item in items)
-            {
-                var current = salaries.Where(s => s.EmpId == item.EmployeeId).OrderByDescending(s => s.EffectiveFrom).FirstOrDefault();
-                if (current == null) continue;
-                item.MonthlySalary = current.MonthlySalary;
-                item.SalaryCurrency = current.Currency;
-            }
-        }
-
-        /// <summary>
-        /// Sets the monthly salary. With no salary yet, one is created. With a different amount, the new one starts today and the old one ends
-        /// yesterday (history is kept); a salary that began today is simply corrected. Returns a short description of what changed, or null.
-        /// </summary>
-        private async Task<string?> ApplySalaryAsync(int employeeId, decimal amount, DateOnly? firstFrom)
-        {
-            amount = Money.Round(amount);
-            var today = Money.Today;
-            var current = await _db.SalaryStructures
-                .Where(s => s.EmpId == employeeId && s.EffectiveTo == null)
-                .OrderByDescending(s => s.EffectiveFrom)
-                .FirstOrDefaultAsync();
-
-            if (current == null)
-            {
-                _db.SalaryStructures.Add(new SalaryStructure
-                {
-                    EmpId = employeeId, MonthlySalary = amount, Currency = "PKR", EffectiveFrom = firstFrom ?? today,
-                    CreatedBy = CurrentUserId, CreatedAt = DateTime.UtcNow,
-                });
-                return $"monthly salary {amount:0.00} PKR";
-            }
-
-            if (current.MonthlySalary == amount) return null;
-
-            var was = current.MonthlySalary;
-            if (current.EffectiveFrom >= today)
-            {
-                current.MonthlySalary = amount;
-            }
-            else
-            {
-                current.EffectiveTo = today.AddDays(-1);
-                _db.SalaryStructures.Add(new SalaryStructure
-                {
-                    EmpId = employeeId, MonthlySalary = amount, Currency = current.Currency,
-                    EffectiveFrom = today, CreatedBy = CurrentUserId, CreatedAt = DateTime.UtcNow,
-                });
-            }
-            return $"monthly salary {amount:0.00} {current.Currency} (was {was:0.00})";
         }
 
         /// <summary>Adds where each employee works right now, so a pool employee who is allocated still shows where.</summary>
@@ -289,7 +224,6 @@ namespace fyp_project.Controllers.Admin
 
             var one = new List<EmployeeListItemDto> { detail };
             await AttachWorkingOrgAsync(one);
-            await AttachSalaryAsync(one);
 
             // Skills and shifts come from tables added by migration 003; show empty until it has been run.
             detail.SkillDetails = await SafeQuery.IfSchemaMissing(
@@ -531,7 +465,6 @@ namespace fyp_project.Controllers.Admin
                     setup.AddRange(await SyncSkillsAsync(employee.EmpId, request.Skills));
                 }
                 if (await ApplyShiftAsync(employee.EmpId, request.ShiftId, false) is { } shiftChange) setup.Add(shiftChange);
-                if (await ApplySalaryAsync(employee.EmpId, request.MonthlySalary!.Value, employee.JoiningDate) is { } salaryNote) setup.Add(salaryNote);
                 await _db.SaveChangesAsync();
 
                 await transaction.CommitAsync();
@@ -660,7 +593,6 @@ namespace fyp_project.Controllers.Admin
 
                 if (request.Skills != null) changes.AddRange(await SyncSkillsAsync(employeeId, request.Skills));
                 if (await ApplyShiftAsync(employeeId, request.ShiftId, request.ClearShift == true) is { } shiftChange) changes.Add(shiftChange);
-                if (request.MonthlySalary.HasValue && await ApplySalaryAsync(employeeId, request.MonthlySalary.Value, null) is { } salaryChange) changes.Add(salaryChange);
 
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();

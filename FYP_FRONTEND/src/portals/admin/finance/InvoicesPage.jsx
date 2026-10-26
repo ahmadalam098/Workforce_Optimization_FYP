@@ -1,8 +1,6 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import Alert from '../../../components/ui/Alert.jsx'
-import Button from '../../../components/ui/Button.jsx'
-import Icon from '../../../components/ui/Icon.jsx'
 import Pagination from '../../../components/ui/Pagination.jsx'
 import SelectField from '../../../components/ui/SelectField.jsx'
 import Spinner from '../../../components/ui/Spinner.jsx'
@@ -34,7 +32,6 @@ function amountsText(list) {
 
 /** What organizations owe the company: invoices, payments and the money overview. */
 function InvoicesPage() {
-  const navigate = useNavigate()
   const [tab, setTab] = useState('invoices')
   const [notice, setNotice] = useFlashNotice()
 
@@ -45,12 +42,7 @@ function InvoicesPage() {
     <div className="page">
       <PageHeader
         title="Invoices"
-        description="Bills for client organizations, built from contract rates and allocated hours."
-        actions={
-          <Button onClick={() => navigate('/admin/invoices/new')}>
-            <Icon name="plus" size={18} /> New invoice
-          </Button>
-        }
+        description="Bills for client organizations. The organization managers prepare them from the contract rates and the allocated hours; you check each one and verify it, which issues it to the organization."
       />
 
       <Notice message={notice} onClose={() => setNotice('')} />
@@ -67,7 +59,7 @@ function InvoicesPage() {
           <article className="card finance-tile">
             <p className="finance-tile__label">Outstanding</p>
             <p className="finance-tile__value finance-tile__value--text">{amountsText(summary.outstanding)}</p>
-            <p className="finance-tile__caption">{summary.draftInvoices} draft invoice{summary.draftInvoices === 1 ? '' : 's'}</p>
+            <p className="finance-tile__caption">{summary.draftInvoices} waiting for your verification</p>
           </article>
           <article className={`card finance-tile ${summary.overdueInvoices > 0 ? 'finance-tile--danger' : ''}`}>
             <p className="finance-tile__label">Overdue</p>
@@ -80,14 +72,16 @@ function InvoicesPage() {
             <p className="finance-tile__caption">each payment at its stored rate</p>
           </article>
           <article className="card finance-tile">
-            <p className="finance-tile__label">Payroll in {summary.month}</p>
-            <p className="finance-tile__value">{formatCurrencyWhole(summary.payrollThisMonthPkr, 'PKR')}</p>
-            <p className="finance-tile__caption">approved or paid runs</p>
+            <p className="finance-tile__label">Expenses in {summary.month}</p>
+            <p className="finance-tile__value">{formatCurrencyWhole(summary.expensesThisMonthPkr, 'PKR')}</p>
+            <p className="finance-tile__caption">
+              <Link to="/admin/expenses">Open expenses</Link>
+            </p>
           </article>
           <article className={`card finance-tile ${summary.profitThisMonthPkr < 0 ? 'finance-tile--danger' : 'finance-tile--gold'}`}>
             <p className="finance-tile__label">Profit in {summary.month}</p>
             <p className="finance-tile__value">{formatCurrencyWhole(summary.profitThisMonthPkr, 'PKR')}</p>
-            <p className="finance-tile__caption">collected − payroll (calculated)</p>
+            <p className="finance-tile__caption">collected − expenses (calculated)</p>
           </article>
         </section>
       ) : (
@@ -110,7 +104,8 @@ function InvoicesPage() {
 
 function InvoiceList({ organizations }) {
   const [search, setSearch] = useState('')
-  const [status, setStatus] = useState('')
+  const [searchParams] = useSearchParams()
+  const [status, setStatus] = useState(searchParams.get('status') ?? '')
   const [organizationId, setOrganizationId] = useState('')
   const [page, setPage] = useState(1)
 
@@ -145,7 +140,7 @@ function InvoiceList({ organizations }) {
       ) : !data && loading ? (
         <Spinner label="Loading invoices..." />
       ) : items.length === 0 ? (
-        <EmptyState icon="file" title="No invoices found" text={filtered ? 'Try changing or clearing the filters.' : 'Create the first invoice for an organization with an active contract.'} />
+        <EmptyState icon="file" title="No invoices found" text={filtered ? 'Try changing or clearing the filters.' : 'When an organization manager prepares an invoice and sends it to you, it appears here for your verification.'} />
       ) : (
         <>
           {error && <ErrorState error={error} onRetry={reload} />}

@@ -266,19 +266,18 @@ namespace fyp_project.Services
                 .Select(i => new { i.InvoiceId, i.OrgId })
                 .ToDictionaryAsync(i => i.InvoiceId, i => i.OrgId);
 
-            var payroll = await _db.PayrollRuns
-                .AsNoTracking()
-                .Where(r => (r.Status == "Approved" || r.Status == "Paid")
-                            && (r.PeriodYear * 12 + r.PeriodMonth) >= (firstMonth.Year * 12 + firstMonth.Month)
-                            && (r.PeriodYear * 12 + r.PeriodMonth) <= (lastMonth.Year * 12 + lastMonth.Month))
-                .Select(r => new { r.PeriodYear, r.PeriodMonth, r.TotalPkr })
-                .ToListAsync();
+            var expenseRows = await SafeQuery.IfSchemaMissing(
+                async () => await _db.CompanyExpenses.AsNoTracking()
+                    .Where(e => e.VoidedAt == null && e.ExpenseDate >= DateOnly.FromDateTime(rangeStart) && e.ExpenseDate < DateOnly.FromDateTime(rangeEnd))
+                    .Select(e => new { e.ExpenseDate, e.AmountPkr })
+                    .ToListAsync(),
+                null) ?? new();
 
             var months = new List<FinancialMonthDto>();
             for (var cursor = firstMonth; cursor <= lastMonth; cursor = cursor.AddMonths(1))
             {
                 var collected = payments.Where(p => p.PaidAt.Year == cursor.Year && p.PaidAt.Month == cursor.Month).Sum(p => p.AmountPkr);
-                var cost = payroll.Where(r => r.PeriodYear == cursor.Year && r.PeriodMonth == cursor.Month).Sum(r => r.TotalPkr);
+                var cost = expenseRows.Where(e => e.ExpenseDate.Year == cursor.Year && e.ExpenseDate.Month == cursor.Month).Sum(e => e.AmountPkr);
 
                 months.Add(new FinancialMonthDto
                 {
@@ -290,7 +289,7 @@ namespace fyp_project.Services
                         .Select(g => new CurrencyAmountDto { Currency = g.Key, Amount = g.Sum(i => i.TotalAmount) })
                         .ToList(),
                     CollectedPkr = collected,
-                    PayrollPkr = cost,
+                    ExpensesPkr = cost,
                     ProfitPkr = collected - cost,
                 });
             }
@@ -317,15 +316,15 @@ namespace fyp_project.Services
                 .ToListAsync();
 
             var totalCollected = months.Sum(m => m.CollectedPkr);
-            var totalPayroll = months.Sum(m => m.PayrollPkr);
+            var totalExpenses = months.Sum(m => m.ExpensesPkr);
 
             return new FinancialReportDto
             {
                 From = from,
                 To = to,
                 TotalCollectedPkr = totalCollected,
-                TotalPayrollPkr = totalPayroll,
-                TotalProfitPkr = totalCollected - totalPayroll,
+                TotalExpensesPkr = totalExpenses,
+                TotalProfitPkr = totalCollected - totalExpenses,
                 Outstanding = open.GroupBy(o => o.Currency).Select(g => new CurrencyAmountDto { Currency = g.Key, Amount = g.Sum(o => o.Balance) }).ToList(),
                 Overdue = open.Where(o => o.DueDate.HasValue && o.DueDate.Value < today)
                     .GroupBy(o => o.Currency).Select(g => new CurrencyAmountDto { Currency = g.Key, Amount = g.Sum(o => o.Balance) }).ToList(),

@@ -11,7 +11,6 @@ const DETAIL_PAGES = {
 const LIST_PAGES = {
   Allocation: '/manager/employee-pool',
   Contract: '/manager/organizations',
-  Payroll: '/manager/salaries',
   AssignmentOffer: '/manager/offers',
   EmployeeReview: '/manager/reviews',
 }

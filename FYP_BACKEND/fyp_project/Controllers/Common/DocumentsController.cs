@@ -23,14 +23,12 @@ namespace fyp_project.Controllers.Common
     {
         private readonly WorkforceManagementDbContext _db;
         private readonly DocumentService _documents;
-        private readonly CallService _scope;
         private readonly string _root;
 
-        public DocumentsController(WorkforceManagementDbContext db, DocumentService documents, CallService scope, IWebHostEnvironment environment)
+        public DocumentsController(WorkforceManagementDbContext db, DocumentService documents, IWebHostEnvironment environment)
         {
             _db = db;
             _documents = documents;
-            _scope = scope;
             _root = Path.Combine(environment.ContentRootPath, "uploads");
         }
 
@@ -46,7 +44,8 @@ namespace fyp_project.Controllers.Common
         private async Task<bool> CanSeeOrganizationAsync(int orgId, bool draft)
         {
             if (Is("Admin")) return true;
-            if (draft) return false;
+            // A draft is seen by the admin and by the organization manager who prepares it, never by the organization.
+            if (draft && !Is("Organization Manager")) return false;
             if (Is("Organization")) return OrgId == orgId;
             if (Is("Organization Manager")) return (await ManagedOrgsAsync()).Contains(orgId);
             return false;
@@ -59,7 +58,7 @@ namespace fyp_project.Controllers.Common
         public async Task<IActionResult> Invoice(int invoiceId)
         {
             var invoice = await _db.Invoices.AsNoTracking().FirstOrDefaultAsync(i => i.InvoiceId == invoiceId);
-            // A draft is still being prepared: only the admin sees it.
+            // A draft is still being prepared: only the admin and the organization manager of that organization see it.
             if (invoice == null || !await CanSeeOrganizationAsync(invoice.OrgId, invoice.Status == InvoiceService.Draft)) return NotFoundDocument();
             return Ok(await _documents.InvoiceAsync(invoice));
         }
@@ -88,24 +87,14 @@ namespace fyp_project.Controllers.Common
             return Ok(await _documents.StatementAsync(id, start, end));
         }
 
-        // GET api/documents/payslip/7
-        [HttpGet("payslip/{itemId:int}")]
-        public async Task<IActionResult> Payslip(int itemId)
+        // GET api/documents/payout/12   (the receipt of a business owner's profit share: that owner, and the admin)
+        [HttpGet("payout/{payoutId:int}")]
+        public async Task<IActionResult> Payout(int payoutId)
         {
-            var item = await _db.PayrollItems.AsNoTracking().FirstOrDefaultAsync(i => i.ItemId == itemId);
-            var run = item == null ? null : await _db.PayrollRuns.AsNoTracking().FirstOrDefaultAsync(r => r.PayrollId == item.PayrollId);
-            if (item == null || run == null) return NotFoundDocument();
-
-            if (!Is("Admin"))
-            {
-                // Everybody else sees it only once the admin approved the payroll (a draft can still change).
-                if (run.Status != "Approved" && run.Status != "Paid") return NotFoundDocument();
-                var employee = await _db.Employees.AsNoTracking().Where(e => e.EmpId == item.EmpId).Select(e => new { e.UserId }).FirstOrDefaultAsync();
-                if (employee?.UserId == null) return NotFoundDocument();
-                var allowed = Is("Employee") ? employee.UserId == UserId : Is("Organization Manager") && await _scope.EmployeeInManagerScopeAsync(employee.UserId.Value, UserId);
-                if (!allowed) return NotFoundDocument();
-            }
-            return Ok(await _documents.PayslipAsync(run, item));
+            var payout = await _db.OwnerPayouts.AsNoTracking().FirstOrDefaultAsync(p => p.PayoutId == payoutId);
+            if (payout == null) return NotFoundDocument();
+            var allowed = Is("Admin") || (Is("Business Owner") && payout.OwnerUserId == UserId);
+            return allowed ? Ok(await _documents.PayoutAsync(payout)) : NotFoundDocument();
         }
 
         // GET api/documents/proof/5   (the file an organization attached to a payment notice: the organization, its manager and the admin only)
@@ -120,26 +109,6 @@ namespace fyp_project.Controllers.Common
             return PhysicalFile(full, type);
         }
 
-        // GET api/documents/payroll/3   (the payroll sheet / bank sheet: admin only)
-        [HttpGet("payroll/{payrollId:int}")]
-        public async Task<IActionResult> Payroll(int payrollId)
-        {
-            if (!Is("Admin")) return NotFoundDocument();
-            var run = await _db.PayrollRuns.AsNoTracking().FirstOrDefaultAsync(r => r.PayrollId == payrollId);
-            return run == null ? NotFoundDocument() : Ok(await _documents.PayrollSheetAsync(run));
-        }
-
-        // GET api/documents/profit?from=2026-01-01&to=2026-10-17   (owners and admin)
-        [HttpGet("profit")]
-        public async Task<IActionResult> Profit(DateOnly? from, DateOnly? to)
-        {
-            if (!Is("Admin") && !Is("Business Owner")) return NotFoundDocument();
-            var end = to ?? Money.Today;
-            var start = from ?? new DateOnly(end.Year, end.Month, 1).AddMonths(-5);
-            if (start > end) return BadRequest(new { message = "The start date cannot be after the end date.", errors = new Dictionary<string, string[]> { ["from"] = new[] { "The start date cannot be after the end date." } } });
-            if ((end.Year - start.Year) * 12 + end.Month - start.Month >= 24) return BadRequest(new { message = "Choose a period of at most 24 months.", errors = new Dictionary<string, string[]> { ["to"] = new[] { "Choose a period of at most 24 months." } } });
-            return Ok(await _documents.ProfitAsync(start, end));
-        }
     }
 
     /// <summary>Public check of a document (the QR on it opens this): says whether the number and code are genuine, without showing anything private.</summary>
@@ -185,15 +154,14 @@ namespace fyp_project.Controllers.Common
                     answer = new { number, kind, organization = invoice.Org?.OrgName, amount = payment.Amount, currency = payment.Currency, date = DateOnly.FromDateTime(payment.PaidAt), status = "Received" };
                 }
             }
-            else if (kind == DocumentCodes.Payslip && number.StartsWith("SLP-") && int.TryParse(number.Split('-').Last(), out var itemId))
+            else if (kind == DocumentCodes.Payout && number.StartsWith("PYT-") && int.TryParse(number.Split('-').Last(), out var payoutId))
             {
-                // A payslip is private: only the fact that it is genuine, and its month, are shown.
-                var item = await _db.PayrollItems.AsNoTracking().FirstOrDefaultAsync(i => i.ItemId == itemId);
-                var run = item == null ? null : await _db.PayrollRuns.AsNoTracking().FirstOrDefaultAsync(r => r.PayrollId == item.PayrollId);
-                if (item != null && run != null && run.Status != "Draft" && DocumentCodes.PayslipNumber(run, item) == number)
+                // A profit share is private: only the fact that it is genuine, and its month, are shown (no name, no amount).
+                var payout = await _db.OwnerPayouts.AsNoTracking().Include(p => p.Settlement).FirstOrDefaultAsync(p => p.PayoutId == payoutId);
+                if (payout?.Settlement != null && DocumentCodes.PayoutNumber(payout.Settlement.PeriodYear, payout.Settlement.PeriodMonth, payout.PayoutId) == number)
                 {
-                    expected = _documents.CodeFor(kind, item.ItemId, item.TotalAmount);
-                    answer = new { number, kind, period = $"{run.PeriodYear}-{run.PeriodMonth:D2}", status = run.Status };
+                    expected = _documents.CodeFor(kind, payout.PayoutId, payout.AmountPkr);
+                    answer = new { number, kind, period = CompanyLedgerService.MonthLabel(payout.Settlement.PeriodYear, payout.Settlement.PeriodMonth), status = "Sent" };
                 }
             }
 

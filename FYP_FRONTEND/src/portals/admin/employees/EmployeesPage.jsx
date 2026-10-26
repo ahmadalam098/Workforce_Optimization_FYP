@@ -13,7 +13,6 @@ import { useDebouncedValue } from '../../../hooks/useDebouncedValue.js'
 import { useFetch } from '../../../hooks/useFetch.js'
 import { employeesApi, organizationsApi, shiftsApi, skillsApi } from '../../../services/admin/adminService.js'
 import { emailSentence } from '../../../utils/emailNote.js'
-import { formatCurrency } from '../../../utils/format.js'
 import { AVAILABILITY_OPTIONS } from '../../../constants/employee.js'
 import EmployeeFormModal from './EmployeeFormModal.jsx'
 import Notice from '../shared/Notice.jsx'
@@ -209,7 +208,6 @@ function EmployeesPage() {
                     <th>Status</th>
                     <th>Shift</th>
                     <th>Organization</th>
-                    <th>Monthly salary</th>
                     <th>Account</th>
                     <th>View</th>
                     <th>
@@ -254,7 +252,6 @@ function EmployeesPage() {
                           <span className="person__sub">Home: {employee.organizationName || 'Central pool'}</span>
                         )}
                       </td>
-                      <td>{employee.monthlySalary != null ? formatCurrency(employee.monthlySalary, employee.salaryCurrency || 'PKR') : <span className="cell-muted">Not set</span>}</td>
                       <td>
                         <ActiveBadge isActive={employee.isActive} />
                       </td>

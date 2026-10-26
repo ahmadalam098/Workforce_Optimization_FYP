@@ -36,64 +36,6 @@ public class PaymentRule
     [Column("updated_at")] public DateTime? UpdatedAt { get; set; }
 }
 
-[Table("Salary_Structure")]
-public class SalaryStructure
-{
-    [Key, Column("structure_id"), DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-    public int StructureId { get; set; }
-
-    [Column("emp_id")] public int EmpId { get; set; }
-    [Column("monthly_salary", TypeName = "decimal(12,2)")] public decimal MonthlySalary { get; set; }
-    [Column("currency"), MaxLength(10)] public string Currency { get; set; } = "PKR";
-    [Column("effective_from")] public DateOnly EffectiveFrom { get; set; }
-    [Column("effective_to")] public DateOnly? EffectiveTo { get; set; }
-    [Column("notes"), MaxLength(255)] public string? Notes { get; set; }
-    [Column("created_by")] public int? CreatedBy { get; set; }
-    [Column("created_at")] public DateTime CreatedAt { get; set; }
-
-    [ForeignKey(nameof(EmpId))] public Employee? Employee { get; set; }
-}
-
-[Table("Payroll_Run")]
-public class PayrollRun
-{
-    [Key, Column("payroll_id"), DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-    public int PayrollId { get; set; }
-
-    [Column("period_year")] public int PeriodYear { get; set; }
-    [Column("period_month")] public int PeriodMonth { get; set; }
-    [Column("status"), MaxLength(20)] public string Status { get; set; } = "Draft";
-    [Column("total_pkr", TypeName = "decimal(14,2)")] public decimal TotalPkr { get; set; }
-    [Column("notes"), MaxLength(255)] public string? Notes { get; set; }
-    [Column("created_by")] public int? CreatedBy { get; set; }
-    [Column("created_at")] public DateTime CreatedAt { get; set; }
-    [Column("approved_by")] public int? ApprovedBy { get; set; }
-    [Column("approved_at")] public DateTime? ApprovedAt { get; set; }
-    [Column("paid_by")] public int? PaidBy { get; set; }
-    [Column("paid_at")] public DateTime? PaidAt { get; set; }
-}
-
-[Table("Payroll_Item")]
-public class PayrollItem
-{
-    [Key, Column("item_id"), DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-    public int ItemId { get; set; }
-
-    [Column("payroll_id")] public int PayrollId { get; set; }
-    [Column("emp_id")] public int EmpId { get; set; }
-    [Column("currency"), MaxLength(10)] public string Currency { get; set; } = "PKR";
-    [Column("exchange_rate", TypeName = "decimal(18,6)")] public decimal ExchangeRate { get; set; } = 1;
-    [Column("base_salary", TypeName = "decimal(12,2)")] public decimal BaseSalary { get; set; }
-    [Column("overtime_hours", TypeName = "decimal(8,2)")] public decimal OvertimeHours { get; set; }
-    [Column("overtime_amount", TypeName = "decimal(12,2)")] public decimal OvertimeAmount { get; set; }
-    [Column("adjustment", TypeName = "decimal(12,2)")] public decimal Adjustment { get; set; }
-    [Column("adjustment_note"), MaxLength(255)] public string? AdjustmentNote { get; set; }
-    [Column("total_amount", TypeName = "decimal(12,2)")] public decimal TotalAmount { get; set; }
-    [Column("total_pkr", TypeName = "decimal(14,2)")] public decimal TotalPkr { get; set; }
-
-    [ForeignKey(nameof(EmpId))] public Employee? Employee { get; set; }
-}
-
 [Table("Invoice")]
 public class Invoice
 {
@@ -115,9 +57,14 @@ public class Invoice
     [Column("cancel_reason"), MaxLength(255)] public string? CancelReason { get; set; }
     [Column("created_by")] public int? CreatedBy { get; set; }
     [Column("created_at")] public DateTime CreatedAt { get; set; }
-    /// <summary>Set when the organization's manager has checked and verified the invoice (migration 011).</summary>
+    /// <summary>Set when the ADMIN verified the invoice and issued it (migration 011 added the columns for the manager; since migration 023 the admin verifies).</summary>
     [Column("verified_at")] public DateTime? VerifiedAt { get; set; }
     [Column("verified_by")] public int? VerifiedBy { get; set; }
+    /// <summary>Set when the organization manager sent the draft to the admin for verification (migration 023). Null = still being prepared.</summary>
+    [Column("submitted_at")] public DateTime? SubmittedAt { get; set; }
+    [Column("submitted_by")] public int? SubmittedBy { get; set; }
+    /// <summary>Why the admin sent the draft back to the manager (cleared when the manager sends it again).</summary>
+    [Column("returned_reason"), MaxLength(255)] public string? ReturnedReason { get; set; }
 
     [ForeignKey(nameof(OrgId))] public Organization? Org { get; set; }
 }

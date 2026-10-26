@@ -1,0 +1,14 @@
+.pay-online__amount {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.9rem 1rem;
+  border-radius: var(--radius-md);
+  background: var(--gold-50);
+  border: 1px solid var(--gold-300);
+}
+
+.pay-online__amount strong {
+  font-size: 1.5rem;
+  color: var(--navy-900);
+}

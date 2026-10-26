@@ -171,7 +171,7 @@ namespace fyp_project.DTOs.Admin
         public int Month { get; set; }
         public List<CurrencyAmountDto> Invoiced { get; set; } = new();
         public decimal CollectedPkr { get; set; }
-        public decimal PayrollPkr { get; set; }
+        public decimal ExpensesPkr { get; set; }
         public decimal ProfitPkr { get; set; }
     }
 
@@ -188,8 +188,8 @@ namespace fyp_project.DTOs.Admin
         public DateOnly From { get; set; }
         public DateOnly To { get; set; }
         public decimal TotalCollectedPkr { get; set; }
-        public decimal TotalPayrollPkr { get; set; }
-        /// <summary>Calculated: collected - payroll. Never stored.</summary>
+        public decimal TotalExpensesPkr { get; set; }
+        /// <summary>Calculated: collected - expenses. Never stored.</summary>
         public decimal TotalProfitPkr { get; set; }
         public List<CurrencyAmountDto> Outstanding { get; set; } = new();
         public List<CurrencyAmountDto> Overdue { get; set; } = new();

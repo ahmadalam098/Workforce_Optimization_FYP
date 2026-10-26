@@ -10,19 +10,17 @@ import { formatCurrency, formatDate, formatDateTime } from '../../../utils/forma
 import '../../admin/finance/FinanceTiles.css'
 import Notice from '../../admin/shared/Notice.jsx'
 import { EmptyState, ErrorState } from '../../admin/shared/StateBox.jsx'
-import { PayInvoiceModal } from './OrganizationPaymentsPage.jsx'
 import PayOnlineModal from './PayOnlineModal.jsx'
 import WorkflowBadge from '../../admin/shared/WorkflowBadge.jsx'
 
 /** Organization: one invoice with its lines and the payments received. Read only. */
 function OrganizationInvoiceDetailsPage() {
   const { invoiceId } = useParams()
-  const [paying, setPaying] = useState(false)
   const [payingOnline, setPayingOnline] = useState(false)
   const [notice, setNotice] = useState('')
   const { data: invoice, error, loading, reload } = useFetch((signal) => organizationBillingApi.invoice(invoiceId, signal), `organization-invoice-${invoiceId}`)
   const { data: options } = useFetch((signal) => organizationPaymentsApi.onlineOptions(signal), 'organization-online-options')
-  const { data: payable, reload: reloadPayable } = useFetch((signal) => organizationPaymentsApi.payable(signal), 'organization-payable')
+  const { data: payable } = useFetch((signal) => organizationPaymentsApi.payable(signal), 'organization-payable')
 
   const back = (
     <Link className="back-link" to="/organization/invoices">
@@ -67,11 +65,6 @@ function OrganizationInvoiceDetailsPage() {
           {toPay && options?.enabled && (
             <Button onClick={() => setPayingOnline(true)}>
               <Icon name="checkCircle" size={17} /> Pay online
-            </Button>
-          )}
-          {toPay && (
-            <Button variant="secondary" onClick={() => setPaying(true)}>
-              <Icon name="plus" size={17} /> I paid another way
             </Button>
           )}
         </div>
@@ -189,21 +182,8 @@ function OrganizationInvoiceDetailsPage() {
           </div>
         )}
       </section>
-      {payingOnline && toPay && <PayOnlineModal invoice={toPay} demo={options?.demo} onClose={() => setPayingOnline(false)} />}
+      {payingOnline && toPay && <PayOnlineModal invoice={toPay} demo={options?.demo} gateway={options?.gateway} onClose={() => setPayingOnline(false)} />}
 
-      {paying && toPay && (
-        <PayInvoiceModal
-          payable={payable}
-          invoice={toPay}
-          onClose={() => setPaying(false)}
-          onDone={(message) => {
-            setPaying(false)
-            setNotice(message)
-            reload()
-            reloadPayable()
-          }}
-        />
-      )}
     </div>
   )
 }

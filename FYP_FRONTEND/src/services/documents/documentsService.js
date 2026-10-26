@@ -2,7 +2,7 @@ import { API_BASE_URL } from '../../config/env.js'
 import { apiRequest } from '../apiClient.js'
 
 // The printable documents of every portal. One server builds them, so every portal sees the same document; the API gives each person only
-// their own (an organization its invoices, a manager the invoices of the organizations they manage, an employee their approved payslips ...).
+// their own (an organization its invoices, a manager the invoices of the organizations they manage, a business owner the receipts of their profit shares ...).
 
 export const documentsApi = {
   /** The invoice with its lines, payments, letterhead, amount in words and the verification code. A draft is for the admin only. */
@@ -11,12 +11,8 @@ export const documentsApi = {
   receipt: (id, signal) => apiRequest(`/api/documents/receipt/${id}`, { signal }),
   /** params: { orgId (admin / manager), from, to } -> one section per currency: opening, rows, closing */
   statement: (params, signal) => apiRequest('/api/documents/statement', { params, signal }),
-  /** The salary slip of one payroll item (employee: own, once approved). */
-  payslip: (id, signal) => apiRequest(`/api/documents/payslip/${id}`, { signal }),
-  /** The payroll / bank sheet of a month (admin). */
-  payroll: (id, signal) => apiRequest(`/api/documents/payroll/${id}`, { signal }),
-  /** params: { from, to } -> revenue, salaries, profit, months and the owners' shares (owner, admin). */
-  profit: (params, signal) => apiRequest('/api/documents/profit', { params, signal }),
+  /** The receipt of one profit share the admin sent to a business owner (that owner, or the admin). */
+  payout: (id, signal) => apiRequest(`/api/documents/payout/${id}`, { signal }),
 }
 
 /** The public check of a document (no sign-in): { valid, document } */

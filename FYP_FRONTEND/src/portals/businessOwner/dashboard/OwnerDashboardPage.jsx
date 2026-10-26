@@ -33,7 +33,7 @@ function amountsText(list, whole = false) {
 
 /**
  * First page of the Business Owner portal. Same layout, colours and fonts as the Admin and Organization Manager dashboards. Every figure is read
- * from the other modules (payments, payroll, employees, allocations), so it changes when they change: the page asks again every few seconds,
+ * from the other modules (payments, expenses, employees, allocations), so it changes when they change: the page asks again every few seconds,
  * when something is saved anywhere, and when the tab is shown again.
  */
 function OwnerDashboardPage() {
@@ -127,14 +127,15 @@ function OwnerDashboardPage() {
       <section className="stat-grid" aria-label="Key metrics">
         <StatCard label="Organizations" value={organizations.total} caption={`${formatNumber(activeOrganizations)} active`} icon="building" />
         <StatCard label="Total employees" value={employees.total} caption={`${formatNumber(employees.active)} active · ${formatNumber(employees.inactive)} inactive`} icon="users" to="/owner/employees" />
-        <StatCard label="Total revenue" valueText={formatCurrencyWhole(money.revenuePkr, 'PKR')} caption={`Payments received · ${data.periodLabel} · open statement`} icon="trendUp" to="/owner/statements" />
-        <StatCard label="Total expense" valueText={formatCurrencyWhole(money.expensePkr, 'PKR')} caption={`Approved and paid payroll · ${data.periodLabel}`} icon="chart" />
+        <StatCard label="Total revenue" valueText={formatCurrencyWhole(money.revenuePkr, 'PKR')} caption={`Payments received · ${data.periodLabel} · open balance sheet`} icon="trendUp" to="/owner/balance-sheet" />
+        <StatCard label="Total expense" valueText={formatCurrencyWhole(money.expensePkr, 'PKR')} caption={`Expenses written down by the admin · ${data.periodLabel}`} to="/owner/balance-sheet" icon="chart" />
         <StatCard
           label="Profit generated"
           valueText={formatCurrencyWhole(money.profitPkr, 'PKR')}
           caption={money.profitPkr < 0 ? 'A loss: expense is more than revenue' : 'Revenue minus expense'}
           icon="sparkles"
         />
+        <StatCard label="Profit sent to owners" valueText={formatCurrencyWhole(money.sentToOwnersPkr, 'PKR')} caption={`${data.periodLabel} · ${formatCurrencyWhole(money.waitingToBeSentPkr, 'PKR')} still waiting to be sent`} icon="send" to="/owner/payouts" />
         <StatCard label="Pending payments" valueText={amountsText(pendingPayments.totals, true)} caption="Issued invoices not fully paid" icon="file" />
       </section>
 

@@ -66,7 +66,7 @@ namespace fyp_project.Controllers.OrganizationPortal
             var rows = new List<object>();
             foreach (var invoice in invoices)
             {
-                var payable = await _submissions.PayableAsync(invoice);
+                var payable = await _submissions.PayableAsync(invoice, countOnline: false);
                 if (payable <= 0) continue;
                 rows.Add(new { invoiceId = invoice.InvoiceId, invoiceNumber = invoice.InvoiceNumber, currency = invoice.Currency, balance = invoice.TotalAmount - invoice.PaidAmount, payable, dueDate = invoice.DueDate, overdue = invoice.DueDate != null && invoice.DueDate < today });
             }

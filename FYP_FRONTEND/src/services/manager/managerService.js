@@ -28,16 +28,6 @@ export const managerInfoApi = {
   employee: (employeeId, signal) => apiRequest(`/api/manager/employees/${employeeId}`, { signal }),
 }
 
-export const managerSalariesApi = {
-  /**
-   * params: { year, month, search, organizationId, status ('Paid' | 'Approved' | 'Draft' | 'NotProcessed'), page, pageSize }
-   * -> { items: [{ employeeId, fullName, orgName, monthlySalary, salaryCurrency, status, statusLabel, totalAmount, payrollCurrency, paidAt ... }], total, summary }
-   */
-  list: (params, signal) => apiRequest('/api/manager/salaries', { params, signal }),
-  /** One of my employees, the last 12 months: { fullName, monthlySalary, currency, months: [{ year, month, status, statusLabel, totalAmount, ... }] } */
-  employee: (employeeId, signal) => apiRequest(`/api/manager/salaries/employees/${employeeId}`, { signal }),
-}
-
 export const managerRequestsApi = {
   /** { waiting (waiting for the manager's decision), approvedShort, fullyStaffed, rejected } */
   summary: (signal) => apiRequest('/api/manager/requests/summary', { signal }),
@@ -110,12 +100,23 @@ export const managerReceivablesApi = {
 export const managerBillingApi = {
   /** Emails the organization a reminder about an invoice that is not paid yet. */
   reminder: (invoiceId) => apiRequest(`/api/manager/billing/invoices/${invoiceId}/reminder`, { method: 'POST' }),
-  /** { currencies: [{ currency, invoiced, paid, outstanding, overdueInvoices }], invoiceCount, unverifiedInvoices, unverifiedPayments } */
+  /** { currencies: [{ currency, invoiced, paid, outstanding, overdueInvoices }], invoiceCount, draftsToSend, returnedDrafts, waitingForAdmin, unverifiedPayments } */
   summary: (signal) => apiRequest('/api/manager/billing/summary', { signal }),
-  /** params: { search, status, organizationId, verified, page, pageSize } -> { items, total, page, pageSize } (drafts are never listed) */
+  /** params: { search, status, organizationId, verified, page, pageSize } -> { items, total, page, pageSize } (your drafts and the ones waiting for the admin are listed too) */
   invoices: (params, signal) => apiRequest('/api/manager/billing/invoices', { params, signal }),
   invoice: (invoiceId, signal) => apiRequest(`/api/manager/billing/invoices/${invoiceId}`, { signal }),
-  verifyInvoice: (invoiceId) => apiRequest(`/api/manager/billing/invoices/${invoiceId}/verify`, { method: 'POST' }),
+  // Invoices are prepared here and verified (issued) by the admin.
+  /** body: { orgId, periodStart, periodEnd } -> lines worked out from the contract rates and the allocated hours (nothing saved) */
+  previewInvoice: (body) => apiRequest('/api/manager/billing/invoices/preview', { method: 'POST', body }),
+  /** Creates a draft. -> { message, invoiceId, invoiceNumber } */
+  createInvoice: (body) => apiRequest('/api/manager/billing/invoices', { method: 'POST', body }),
+  recalculateInvoice: (invoiceId) => apiRequest(`/api/manager/billing/invoices/${invoiceId}/recalculate`, { method: 'POST' }),
+  addInvoiceLine: (invoiceId, body) => apiRequest(`/api/manager/billing/invoices/${invoiceId}/lines`, { method: 'POST', body }),
+  deleteInvoiceLine: (invoiceId, lineId) => apiRequest(`/api/manager/billing/invoices/${invoiceId}/lines/${lineId}`, { method: 'DELETE' }),
+  /** Sends the finished draft to the admin for verification. */
+  submitInvoice: (invoiceId) => apiRequest(`/api/manager/billing/invoices/${invoiceId}/submit`, { method: 'POST' }),
+  /** Throws away a draft that was never sent. */
+  discardInvoice: (invoiceId, reason) => apiRequest(`/api/manager/billing/invoices/${invoiceId}/discard`, { method: 'POST', body: { reason } }),
   /** params: { search, organizationId, verified, page, pageSize } */
   payments: (params, signal) => apiRequest('/api/manager/billing/payments', { params, signal }),
   verifyPayment: (paymentId) => apiRequest(`/api/manager/billing/payments/${paymentId}/verify`, { method: 'POST' }),

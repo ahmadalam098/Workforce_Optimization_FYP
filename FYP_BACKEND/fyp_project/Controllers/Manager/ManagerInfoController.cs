@@ -13,7 +13,7 @@ namespace fyp_project.Controllers.Manager
     /// An organization page shows the organization, its contract, its managers and the employees working for it.
     /// An employee page shows skills, shift, where they work and their allocation history. An employee who works for (or belongs to) one of
     /// the manager's organizations is shown with their contact details; any other pool employee only with what is needed to choose them.
-    /// No CNIC or password is ever shown, and pay is only shown on the Salary status pages (ManagerSalariesController).
+    /// No CNIC or password is ever shown.
     /// </summary>
     [ApiController]
     [Authorize(Policy = "ManagerOnly")]

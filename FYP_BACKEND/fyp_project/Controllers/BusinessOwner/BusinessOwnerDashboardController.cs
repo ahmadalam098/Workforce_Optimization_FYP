@@ -10,8 +10,9 @@ namespace fyp_project.Controllers.BusinessOwnerPortal
 {
     /// <summary>
     /// Business Owner portal: the dashboard figures and the employee list. Everything is read from what the other modules already hold, with the
-    /// same meaning as in the Admin Finance page: revenue = payments received (Invoice_Payment, in PKR), expense = approved or paid payroll (in PKR),
-    /// profit = revenue - expense (calculated, never stored); pending payment = issued invoices that are not fully paid. Read only.
+    /// same meaning as in the Admin Finance page: revenue = payments received (Invoice_Payment, in PKR), expense = what the admin wrote down
+    /// (Company_Expense, in PKR), profit = revenue - expense (calculated, never stored); pending payment = issued invoices that are not fully paid.
+    /// What the admin already sent to the owners (Owner_Payout) and what is still waiting to be sent are shown too. Read only.
     /// </summary>
     [ApiController]
     [Authorize(Policy = "BusinessOwnerOnly")]
@@ -25,11 +26,13 @@ namespace fyp_project.Controllers.BusinessOwnerPortal
 
         private readonly WorkforceManagementDbContext _db;
         private readonly RoleService _roles;
+        private readonly CompanyLedgerService _ledger;
 
-        public BusinessOwnerDashboardController(WorkforceManagementDbContext db, RoleService roles)
+        public BusinessOwnerDashboardController(WorkforceManagementDbContext db, RoleService roles, CompanyLedgerService ledger)
         {
             _db = db;
             _roles = roles;
+            _ledger = ledger;
         }
 
         private int? CurrentUserId
@@ -54,29 +57,24 @@ namespace fyp_project.Controllers.BusinessOwnerPortal
             period = Periods.Contains(period) ? period! : "allTime";
             var today = Money.Today;
 
-            // The period as dates (for payments) and as month numbers (year * 12 + month, for payroll).
+            // The period as dates.
             DateTime? from = null, to = null;
-            int? monthFrom = null, monthTo = null;
             string label = "All time";
             switch (period)
             {
                 case "thisMonth":
                     from = new DateTime(today.Year, today.Month, 1);
                     to = from.Value.AddMonths(1);
-                    monthFrom = monthTo = today.Year * 12 + today.Month;
                     label = from.Value.ToString("MMMM yyyy");
                     break;
                 case "lastMonth":
                     from = new DateTime(today.Year, today.Month, 1).AddMonths(-1);
                     to = from.Value.AddMonths(1);
-                    monthFrom = monthTo = from.Value.Year * 12 + from.Value.Month;
                     label = from.Value.ToString("MMMM yyyy");
                     break;
                 case "thisYear":
                     from = new DateTime(today.Year, 1, 1);
                     to = from.Value.AddYears(1);
-                    monthFrom = today.Year * 12 + 1;
-                    monthTo = today.Year * 12 + 12;
                     label = today.Year.ToString();
                     break;
             }
@@ -86,10 +84,16 @@ namespace fyp_project.Controllers.BusinessOwnerPortal
             if (from != null) payments = payments.Where(p => p.PaidAt >= from && p.PaidAt < to);
             var revenue = await payments.SumAsync(p => p.AmountPkr);
 
-            var runs = _db.PayrollRuns.AsNoTracking().Where(r => r.Status == "Approved" || r.Status == "Paid");
-            if (monthFrom != null) runs = runs.Where(r => r.PeriodYear * 12 + r.PeriodMonth >= monthFrom && r.PeriodYear * 12 + r.PeriodMonth <= monthTo);
-            var expense = await runs.SumAsync(r => r.TotalPkr);
+            var expenses = _db.CompanyExpenses.AsNoTracking().Where(e => e.VoidedAt == null);
+            if (from != null) expenses = expenses.Where(e => e.ExpenseDate >= DateOnly.FromDateTime(from.Value) && e.ExpenseDate < DateOnly.FromDateTime(to!.Value));
+            var expense = await expenses.SumAsync(e => (decimal?)e.AmountPkr) ?? 0m;
             var profit = revenue - expense;
+
+            // What the admin already sent to the owners in this period, and what still waits to be sent (all time).
+            var sentQuery = _db.OwnerSettlements.AsNoTracking().AsQueryable();
+            if (from != null) sentQuery = sentQuery.Where(s => s.SettledAt >= from && s.SettledAt < to);
+            var sentToOwners = await sentQuery.SumAsync(s => (decimal?)s.AmountPkr) ?? 0m;
+            var balance = await _ledger.BalanceAsync();
 
             // ---- the owners who share the profit (equally; there is no ownership percentage in the system)
             var ownerRoleIds = await _roles.FindRoleIdsAsync(RoleNames.BusinessOwner);
@@ -167,7 +171,7 @@ namespace fyp_project.Controllers.BusinessOwnerPortal
                 periodLabel = label,
                 organizations = new { total = orgStatuses.Sum(s => s.count), byStatus = orgStatuses.OrderByDescending(s => s.count).Select(s => new { status = s.status ?? "Unknown", s.count }) },
                 employees = new { total = employeeTotal, active = employeeActive, inactive = employeeTotal - employeeActive },
-                money = new { revenuePkr = revenue, expensePkr = expense, profitPkr = profit },
+                money = new { revenuePkr = revenue, expensePkr = expense, profitPkr = profit, sentToOwnersPkr = sentToOwners, waitingToBeSentPkr = balance.Available },
                 owners = new { count = owners.Count, shares },
                 pendingPayments = new { totals = pendingTotals, byOrganization = pending },
                 utilization = new

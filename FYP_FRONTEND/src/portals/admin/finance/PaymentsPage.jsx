@@ -19,7 +19,7 @@ import { EmptyState, ErrorState } from '../shared/StateBox.jsx'
 import './FinanceTiles.css'
 
 const PAGE_SIZE = 15
-const METHODS = ['Bank transfer', 'Cash', 'Cheque', 'Online payment', 'Other'].map((value) => ({ value, label: value }))
+const METHODS = ['Bank transfer', 'Cash', 'Cheque', 'Online - Safepay', 'Online payment', 'Other'].map((value) => ({ value, label: value }))
 const CHECKED = [
   { value: 'true', label: 'Verified by the manager' },
   { value: 'false', label: 'Not verified' },

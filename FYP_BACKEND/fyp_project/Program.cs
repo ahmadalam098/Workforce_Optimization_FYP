@@ -66,17 +66,23 @@ builder.Services.AddScoped<EmployeeStatusService>();
 builder.Services.AddScoped<AllocationService>();
 builder.Services.AddScoped<ExchangeRateService>();
 builder.Services.AddScoped<PaymentRuleService>();
-builder.Services.AddScoped<SalaryReportService>();
+builder.Services.AddScoped<CompanyLedgerService>();
 builder.Services.AddScoped<DailyStaffingService>();
 builder.Services.AddScoped<ContractModificationService>();
 builder.Services.AddHostedService<DailyStaffingWorker>();
 builder.Services.AddScoped<InvoiceService>();
+builder.Services.AddScoped<InvoiceWorkflowService>();
 builder.Services.AddScoped<PaymentService>();
 builder.Services.AddScoped<DocumentService>();
 builder.Services.AddScoped<PaymentSubmissionService>();
 builder.Services.AddScoped<BillingMailService>();
-// The payment gateway behind "Pay online". Only the demo gateway exists; a real one is another IPaymentGateway (config Payments:Gateway).
-builder.Services.AddScoped<IPaymentGateway, DemoPaymentGateway>();
+// The payment gateway behind "Pay online": appsettings "Payments:Gateway" = "Safepay" (keys in the "Safepay" section) or "Demo" (default).
+builder.Services.Configure<SafepayOptions>(builder.Configuration.GetSection("Safepay"));
+builder.Services.AddHttpClient<SafepayClient>();
+if (string.Equals(builder.Configuration["Payments:Gateway"], "Safepay", StringComparison.OrdinalIgnoreCase))
+    builder.Services.AddScoped<IPaymentGateway, SafepayGateway>();
+else
+    builder.Services.AddScoped<IPaymentGateway, DemoPaymentGateway>();
 builder.Services.AddScoped<OnlinePaymentService>();
 builder.Services.AddScoped<ReportService>();
 
@@ -287,7 +293,8 @@ if (app.Environment.IsDevelopment())
 // HTTPS REDIRECTION
 // =====================================================
 
-app.UseHttpsRedirection();
+// The Safepay webhook comes through ngrok to http://localhost:5089; a redirect to https://localhost would never reach us, so it is left out.
+app.UseWhen(context => !context.Request.Path.StartsWithSegments("/api/gateway/safepay"), branch => branch.UseHttpsRedirection());
 
 
 // =====================================================

@@ -6,15 +6,17 @@ using Microsoft.EntityFrameworkCore;
 
 namespace fyp_project.Controllers.Admin
 {
-    /// <summary>Admin portal: money overview and the payment status of every organization. Profit is calculated, never stored.</summary>
+    /// <summary>Admin portal: money overview and the payment status of every organization. Profit (received - expenses) is calculated, never stored.</summary>
     [Route("api/admin/finance")]
     public class AdminFinanceController : AdminControllerBase
     {
         private readonly WorkforceManagementDbContext _db;
+        private readonly CompanyLedgerService _ledger;
 
-        public AdminFinanceController(WorkforceManagementDbContext db)
+        public AdminFinanceController(WorkforceManagementDbContext db, CompanyLedgerService ledger)
         {
             _db = db;
+            _ledger = ledger;
         }
 
         // GET api/admin/finance/summary
@@ -42,9 +44,12 @@ namespace fyp_project.Controllers.Admin
                 .Where(p => p.PaidAt >= monthStart && p.PaidAt < nextMonth)
                 .SumAsync(p => p.AmountPkr);
 
-            var payroll = await _db.PayrollRuns
-                .Where(r => r.PeriodYear == today.Year && r.PeriodMonth == today.Month && (r.Status == "Approved" || r.Status == "Paid"))
-                .SumAsync(r => r.TotalPkr);
+            var monthStartDate = DateOnly.FromDateTime(monthStart);
+            var nextMonthDate = DateOnly.FromDateTime(nextMonth);
+            var expenses = await SafeQuery.IfSchemaMissing(
+                async () => await _db.CompanyExpenses.AsNoTracking().Where(e => e.VoidedAt == null && e.ExpenseDate >= monthStartDate && e.ExpenseDate < nextMonthDate).SumAsync(e => (decimal?)e.AmountPkr) ?? 0m,
+                0m);
+            var available = await SafeQuery.IfSchemaMissing(async () => (await _ledger.BalanceAsync()).Available, 0m);
 
             return Ok(new FinanceSummaryDto
             {
@@ -54,8 +59,9 @@ namespace fyp_project.Controllers.Admin
                 OverdueInvoices = overdueRows.Count,
                 DraftInvoices = await _db.Invoices.CountAsync(i => i.Status == "Draft"),
                 CollectedThisMonthPkr = collected,
-                PayrollThisMonthPkr = payroll,
-                ProfitThisMonthPkr = collected - payroll,
+                ExpensesThisMonthPkr = expenses,
+                ProfitThisMonthPkr = collected - expenses,
+                AvailableToSendPkr = available,
                 HasExchangeRate = await _db.ExchangeRates.AnyAsync(),
             });
         }

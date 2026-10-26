@@ -4,7 +4,7 @@ import TextField from '../../../components/ui/TextField.jsx'
 import SelectField from '../../../components/ui/SelectField.jsx'
 import Button from '../../../components/ui/Button.jsx'
 import Alert from '../../../components/ui/Alert.jsx'
-import { invoicesApi } from '../../../services/admin/adminService.js'
+import { managerBillingApi } from '../../../services/manager/managerService.js'
 import { formatCurrency } from '../../../utils/format.js'
 import { validateDate, validateDateOrder } from '../../../utils/validators.js'
 
@@ -18,8 +18,8 @@ function lastMonth() {
 }
 
 /**
- * Create a draft invoice. "Preview" works out the lines from the contract rates and the hours employees
- * were allocated to the organization; nothing is saved until "Create draft invoice".
+ * The organization manager prepares an invoice. "Preview" works out the lines from the contract rates and the hours employees
+ * were allocated to the organization; nothing is saved until "Create draft invoice". The draft is then checked, adjusted and sent to the admin, who verifies it.
  */
 function InvoiceCreateModal({ organizations, onClose, onCreated }) {
   const defaults = lastMonth()
@@ -63,7 +63,7 @@ function InvoiceCreateModal({ organizations, onClose, onCreated }) {
     setBusy('preview')
     setServerError('')
     try {
-      setPreview(await invoicesApi.preview(body()))
+      setPreview(await managerBillingApi.previewInvoice(body()))
     } catch (error) {
       setErrors((current) => ({ ...current, ...error.fieldErrors }))
       setServerError(error.message)
@@ -76,7 +76,7 @@ function InvoiceCreateModal({ organizations, onClose, onCreated }) {
     setBusy('create')
     setServerError('')
     try {
-      const result = await invoicesApi.create(body())
+      const result = await managerBillingApi.createInvoice(body())
       onCreated(result)
     } catch (error) {
       setServerError(error.message)

@@ -280,14 +280,14 @@ function FinancialReport({ from, to }) {
   return (
     <ReportFrame fetcher={(signal) => reportsApi.financial({ from, to }, signal)} keyPart={`fin-${from}-${to}`}>
       {(report) => {
-        const maxMonth = Math.max(1, ...report.months.flatMap((m) => [m.collectedPkr, m.payrollPkr]))
+        const maxMonth = Math.max(1, ...report.months.flatMap((m) => [m.collectedPkr, m.expensesPkr]))
         const amounts = (list) => (list.length === 0 ? '—' : list.map((i) => formatCurrencyWhole(i.amount, i.currency)).join(' · '))
         return (
           <>
             <section className="finance-tiles">
               <Tile label="Collected" value={formatCurrencyWhole(report.totalCollectedPkr, 'PKR')} caption="payments at their stored rates" />
-              <Tile label="Payroll" value={formatCurrencyWhole(report.totalPayrollPkr, 'PKR')} caption="approved or paid runs" />
-              <Tile label="Profit" value={formatCurrencyWhole(report.totalProfitPkr, 'PKR')} caption="collected − payroll (calculated)" tone={report.totalProfitPkr < 0 ? 'danger' : 'gold'} />
+              <Tile label="Expenses" value={formatCurrencyWhole(report.totalExpensesPkr, 'PKR')} caption="written down by the admin" />
+              <Tile label="Profit" value={formatCurrencyWhole(report.totalProfitPkr, 'PKR')} caption="collected − expenses (calculated)" tone={report.totalProfitPkr < 0 ? 'danger' : 'gold'} />
               <Tile label="Outstanding now" value={<span className="finance-tile__value--text">{amounts(report.outstanding)}</span>} caption={report.overdue.length > 0 ? `overdue: ${amounts(report.overdue)}` : 'nothing overdue'} tone={report.overdue.length > 0 ? 'danger' : ''} />
             </section>
 
@@ -296,23 +296,23 @@ function FinancialReport({ from, to }) {
               action={
                 <ExportButton
                   onClick={() =>
-                    downloadCsv(`financial-${from}-to-${to}.csv`, ['Month', 'Invoiced', 'Collected (PKR)', 'Payroll (PKR)', 'Profit (PKR)'],
-                      report.months.map((m) => [formatMonth(m.year, m.month), m.invoiced.map((i) => `${i.amount} ${i.currency}`).join(' + '), m.collectedPkr, m.payrollPkr, m.profitPkr]))
+                    downloadCsv(`financial-${from}-to-${to}.csv`, ['Month', 'Invoiced', 'Collected (PKR)', 'Expenses (PKR)', 'Profit (PKR)'],
+                      report.months.map((m) => [formatMonth(m.year, m.month), m.invoiced.map((i) => `${i.amount} ${i.currency}`).join(' + '), m.collectedPkr, m.expensesPkr, m.profitPkr]))
                   }
                 />
               }
             >
               <div className="card__body">
-                <div className="column-chart column-chart--paired" role="img" aria-label="Collected and payroll per month">
+                <div className="column-chart column-chart--paired" role="img" aria-label="Collected and expenses per month">
                   {report.months.map((m) => (
-                    <div className="column-chart__col column-chart__col--pair" key={`${m.year}-${m.month}`} title={`${formatMonth(m.year, m.month)}: collected ${formatCurrencyWhole(m.collectedPkr, 'PKR')}, payroll ${formatCurrencyWhole(m.payrollPkr, 'PKR')}`}>
+                    <div className="column-chart__col column-chart__col--pair" key={`${m.year}-${m.month}`} title={`${formatMonth(m.year, m.month)}: collected ${formatCurrencyWhole(m.collectedPkr, 'PKR')}, expenses ${formatCurrencyWhole(m.expensesPkr, 'PKR')}`}>
                       <span className="column-chart__bar column-chart__bar--gold" style={{ height: `${(m.collectedPkr / maxMonth) * 100}%` }} />
-                      <span className="column-chart__bar column-chart__bar--navy" style={{ height: `${(m.payrollPkr / maxMonth) * 100}%` }} />
+                      <span className="column-chart__bar column-chart__bar--navy" style={{ height: `${(m.expensesPkr / maxMonth) * 100}%` }} />
                     </div>
                   ))}
                 </div>
                 <p className="report-legend">
-                  <span className="report-legend__dot report-legend__dot--gold" /> Collected <span className="report-legend__dot report-legend__dot--navy" /> Payroll
+                  <span className="report-legend__dot report-legend__dot--gold" /> Collected <span className="report-legend__dot report-legend__dot--navy" /> Expenses
                 </p>
               </div>
               <div className="table-wrap">
@@ -322,7 +322,7 @@ function FinancialReport({ from, to }) {
                       <th>Month</th>
                       <th className="num">Invoiced</th>
                       <th className="num">Collected</th>
-                      <th className="num">Payroll</th>
+                      <th className="num">Expenses</th>
                       <th className="num">Profit</th>
                     </tr>
                   </thead>
@@ -332,7 +332,7 @@ function FinancialReport({ from, to }) {
                         <td>{formatMonth(m.year, m.month)}</td>
                         <td className="num">{amounts(m.invoiced)}</td>
                         <td className="num">{formatCurrency(m.collectedPkr, 'PKR')}</td>
-                        <td className="num">{formatCurrency(m.payrollPkr, 'PKR')}</td>
+                        <td className="num">{formatCurrency(m.expensesPkr, 'PKR')}</td>
                         <td className="num">
                           <strong style={{ color: m.profitPkr < 0 ? 'var(--danger)' : 'inherit' }}>{formatCurrency(m.profitPkr, 'PKR')}</strong>
                         </td>

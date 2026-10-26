@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace fyp_project.Controllers.Admin
 {
-    /// <summary>Admin portal: system payment rules (invoice due days, overtime multiplier, ...) and USD/PKR style exchange rates.</summary>
+    /// <summary>Admin portal: system payment rules (invoice due days, ...) and USD/PKR style exchange rates.</summary>
     public class AdminPaymentRulesController : AdminControllerBase
     {
         private readonly WorkforceManagementDbContext _db;
@@ -30,7 +30,7 @@ namespace fyp_project.Controllers.Admin
         [HttpGet("api/admin/payment-rules")]
         public async Task<IActionResult> ListRules()
         {
-            var rules = await _db.PaymentRules.AsNoTracking().OrderByDescending(r => r.IsSystem).ThenBy(r => r.Title).ToListAsync();
+            var rules = await _db.PaymentRules.AsNoTracking().Where(r => !PaymentRuleService.RetiredKeys.Contains(r.RuleKey)).OrderByDescending(r => r.IsSystem).ThenBy(r => r.Title).ToListAsync();
             return Ok(rules.Select(ToDto).ToList());
         }
 

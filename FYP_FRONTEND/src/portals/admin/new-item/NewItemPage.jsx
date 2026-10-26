@@ -5,10 +5,8 @@ import Spinner from '../../../components/ui/Spinner.jsx'
 import { useFetch } from '../../../hooks/useFetch.js'
 import { organizationsApi, skillsApi } from '../../../services/admin/adminService.js'
 import EmployeeFormModal from '../employees/EmployeeFormModal.jsx'
-import InvoiceCreateModal from '../finance/InvoiceCreateModal.jsx'
 import OrganizationFormModal from '../organizations/OrganizationFormModal.jsx'
 import { ExchangeRateModal, PaymentRuleModal } from '../finance/PaymentRuleModals.jsx'
-import { NewPayrollModal, OvertimeFormModal } from '../finance/PayrollModals.jsx'
 import RequestFormModal from '../requests/RequestFormModal.jsx'
 import RuleFormModal from '../contracts/RuleFormModal.jsx'
 import ShiftFormModal from '../shifts/ShiftFormModal.jsx'
@@ -136,31 +134,6 @@ function ExchangeRateFlow() {
   )
 }
 
-function PayrollFlow() {
-  return (
-    <Shell backTo="/admin/payroll" backLabel="Payroll">
-      {(close, saved) => <NewPayrollModal onClose={close} onCreated={(result) => saved(result.message || 'Payroll generated.')} />}
-    </Shell>
-  )
-}
-
-function OvertimeFlow() {
-  return (
-    <Shell backTo="/admin/payroll" backLabel="Payroll">
-      {(close, saved) => <OvertimeFormModal onClose={close} onSaved={(message) => saved(message, { tab: 'overtime' })} />}
-    </Shell>
-  )
-}
-
-function InvoiceFlow() {
-  const { data, error } = useOrganizations()
-  return (
-    <Shell backTo="/admin/invoices" backLabel="Invoices" loading={!data} error={error}>
-      {(close, saved) => <InvoiceCreateModal organizations={data} onClose={close} onCreated={(result) => saved(result.message || 'Draft invoice created.')} />}
-    </Shell>
-  )
-}
-
 function ContractRuleFlow() {
   const { contractId } = useParams()
   return (
@@ -180,9 +153,6 @@ const FLOWS = {
   ticket: TicketFlow,
   'payment-rule': PaymentRuleFlow,
   'exchange-rate': ExchangeRateFlow,
-  payroll: PayrollFlow,
-  overtime: OvertimeFlow,
-  invoice: InvoiceFlow,
   'contract-rule': ContractRuleFlow,
 }
 

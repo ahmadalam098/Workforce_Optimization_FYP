@@ -51,12 +51,12 @@ namespace fyp_project.Services
         }
     }
 
-    /// <summary>Reads the system payment rules (invoice due days, overtime multiplier, ...).</summary>
+    /// <summary>Reads the system payment rules (invoice due days, ...).</summary>
     public class PaymentRuleService
     {
         public const string InvoiceDueDays = "INVOICE_DUE_DAYS";
-        public const string OvertimeMultiplier = "OVERTIME_MULTIPLIER";
-        public const string WorkingHoursPerMonth = "WORKING_HOURS_PER_MONTH";
+        /// <summary>Rules that only existed for salaries (the system no longer has payroll); they stay in the table but are not shown or used.</summary>
+        public static readonly string[] RetiredKeys = { "OVERTIME_MULTIPLIER", "WORKING_HOURS_PER_MONTH" };
 
         private readonly WorkforceManagementDbContext _db;
 
@@ -75,13 +75,6 @@ namespace fyp_project.Services
             return value ?? fallback;
         }
 
-        /// <summary>The overtime rate per hour: (salary / working hours) x overtime multiplier, both from Payment Rules. There is no per-employee rate.</summary>
-        public async Task<decimal> OvertimeRateAsync(SalaryStructure structure)
-        {
-            var hours = await GetAsync(WorkingHoursPerMonth, 208m);
-            var multiplier = await GetAsync(OvertimeMultiplier, 1.5m);
-            return hours <= 0 ? 0 : Money.Round(structure.MonthlySalary / hours * multiplier);
-        }
     }
 
     public record UsageInterval(DateTime Start, DateTime End);

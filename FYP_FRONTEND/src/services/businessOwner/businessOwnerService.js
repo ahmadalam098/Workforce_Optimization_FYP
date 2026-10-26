@@ -7,7 +7,7 @@ export const businessOwnerApi = {
   overview: (signal) => apiRequest('/api/business-owner/overview', { signal }),
   /**
    * period: 'allTime' | 'thisMonth' | 'lastMonth' | 'thisYear' ->
-   * { period, periodLabel, organizations: { total, byStatus }, employees: { total, active, inactive }, money: { revenuePkr, expensePkr, profitPkr },
+   * { period, periodLabel, organizations: { total, byStatus }, employees: { total, active, inactive }, money: { revenuePkr, expensePkr (expenses written down by the admin), profitPkr, sentToOwnersPkr, waitingToBeSentPkr },
    *   owners: { count, shares: [{ userId, fullName, email, sharePkr }] }, pendingPayments: { totals, byOrganization },
    *   utilization: { activeEmployees, working, free, percent }, allocationByOrganization: { items: [{ orgId, name, count }], otherCount },
    *   allocationActivity: [{ date, allocated, reallocated, released }], updatedAt }
@@ -36,4 +36,13 @@ export const ownerSettingsApi = {
   notifications: (signal) => apiRequest('/api/business-owner/settings/notifications', { signal }),
   /** body: { inApp } */
   saveNotifications: (body) => apiRequest('/api/business-owner/settings/notifications', { method: 'PUT', body }),
+}
+
+/** The money of the business owner: the profit shares the admin sent (each with a receipt) and the company's balance sheet. */
+export const ownerFinanceApi = {
+  /** { totals: { allTimePkr, thisYearPkr, thisMonthPkr, count }, items: [{ payoutId, number, amountPkr, sentAt, label, owners }] } */
+  payouts: (signal) => apiRequest('/api/business-owner/payouts', { signal }),
+  /** year?, month? -> { balance, sheet, month: { label, totalPkr, byOrganization } } */
+  balanceSheet: (year, month, signal) => apiRequest('/api/business-owner/balance-sheet', { params: { year, month }, signal }),
+  transactions: (page, signal) => apiRequest('/api/business-owner/transactions', { params: { page, pageSize: 15 }, signal }),
 }

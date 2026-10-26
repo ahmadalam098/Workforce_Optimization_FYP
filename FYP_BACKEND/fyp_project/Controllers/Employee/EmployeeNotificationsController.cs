@@ -26,10 +26,9 @@ namespace fyp_project.Controllers.EmployeePortal
     public class EmployeeNotificationsController : ControllerBase
     {
         private static readonly string[] TicketActions = { "TICKET_RESOLVED", "TICKET_FORWARDED" };
-        private static readonly string[] PayrollActions = { "PAYROLL_APPROVED", "PAYROLL_PAID" };
         private static readonly string[] EmployeeActions =
         {
-            "SHIFT_ASSIGNED", "SHIFT_UNASSIGNED", "SALARY_SET", "SALARY_CHANGED",
+            "SHIFT_ASSIGNED", "SHIFT_UNASSIGNED",
             "EMPLOYEE_UPDATED", "EMPLOYEE_SKILL_ADDED", "EMPLOYEE_SKILL_UPDATED", "EMPLOYEE_SKILL_REMOVED",
             "EMPLOYEE_ACTIVATED", "EMPLOYEE_DEACTIVATED", "EMPLOYEE_PASSWORD_RESET", "EMPLOYEE_WARNED", "CALL_CUT_BY_MANAGER", "OFFER_SENT",
         };
@@ -41,10 +40,6 @@ namespace fyp_project.Controllers.EmployeePortal
             ["TICKET_FORWARDED"] = "Your query was sent to the admin",
             ["SHIFT_ASSIGNED"] = "You have a new shift",
             ["SHIFT_UNASSIGNED"] = "Your shift was removed",
-            ["SALARY_SET"] = "Your salary was set",
-            ["SALARY_CHANGED"] = "Your salary was changed",
-            ["PAYROLL_APPROVED"] = "Your salary was approved",
-            ["PAYROLL_PAID"] = "Your salary was paid",
             ["EMPLOYEE_ALLOCATED"] = "You were allocated to an organization",
             ["EMPLOYEE_REALLOCATED"] = "You were moved to another organization",
             ["EMPLOYEE_RELEASED"] = "You were released from an organization",
@@ -90,27 +85,21 @@ namespace fyp_project.Controllers.EmployeePortal
             return text.Length == 0 ? action : char.ToUpperInvariant(text[0]) + text[1..];
         }
 
-        private sealed record Mine(int? EmpId, List<string> TicketKeys, List<string> PayrollKeys, List<string> AllocationKeys, Dictionary<string, string> TicketNumbers, Dictionary<string, string> PayrollNames);
+        private sealed record Mine(int? EmpId, List<string> TicketKeys, List<string> AllocationKeys, Dictionary<string, string> TicketNumbers);
 
         private async Task<Mine> MineAsync(int me)
         {
             var empId = await _db.Employees.AsNoTracking().Where(e => e.UserId == me).Select(e => (int?)e.EmpId).FirstOrDefaultAsync();
-            if (empId == null) return new Mine(null, new(), new(), new(), new(), new());
+            if (empId == null) return new Mine(null, new(), new(), new());
 
             var tickets = await _db.Tickets.AsNoTracking().Where(t => t.RaisedByUserId == me && t.Source == "Employee").Select(t => new { t.TicketId, t.TicketNumber }).ToListAsync();
-            var runs = await (from i in _db.PayrollItems.AsNoTracking()
-                              join r in _db.PayrollRuns.AsNoTracking() on i.PayrollId equals r.PayrollId
-                              where i.EmpId == empId
-                              select new { r.PayrollId, r.PeriodMonth, r.PeriodYear }).ToListAsync();
             var allocations = await _db.EmployeeAllocations.AsNoTracking().Where(a => a.EmployeeId == empId).Select(a => a.AllocationId).ToListAsync();
 
             return new Mine(
                 empId,
                 tickets.Select(t => t.TicketId.ToString()).ToList(),
-                runs.Select(r => r.PayrollId.ToString()).Distinct().ToList(),
                 allocations.Select(a => a.ToString()).ToList(),
-                tickets.ToDictionary(t => t.TicketId.ToString(), t => t.TicketNumber ?? $"#{t.TicketId}"),
-                runs.GroupBy(r => r.PayrollId).ToDictionary(g => g.Key.ToString(), g => $"{g.First().PeriodMonth:00}/{g.First().PeriodYear}"));
+                tickets.ToDictionary(t => t.TicketId.ToString(), t => t.TicketNumber ?? $"#{t.TicketId}"));
         }
 
         /// <summary>The audit entries that concern this employee, newest first.</summary>
@@ -120,7 +109,6 @@ namespace fyp_project.Controllers.EmployeePortal
             var userKey = me.ToString();
             return _db.AuditLogs.AsNoTracking().Where(a => a.ActorUserId != me && (
                 (a.EntityType == "Ticket" && mine.TicketKeys.Contains(a.EntityId!) && TicketActions.Contains(a.Action)) ||
-                (a.EntityType == "Payroll" && mine.PayrollKeys.Contains(a.EntityId!) && PayrollActions.Contains(a.Action)) ||
                 (a.EntityType == "Allocation" && mine.AllocationKeys.Contains(a.EntityId!)) ||
                 (a.EntityType == "Employee" && empKey != null && a.EntityId == empKey && EmployeeActions.Contains(a.Action)) ||
                 (a.EntityType == "User" && a.EntityId == userKey && UserActions.Contains(a.Action))));
@@ -130,7 +118,6 @@ namespace fyp_project.Controllers.EmployeePortal
         private static string? MessageOf(AuditLog a, Mine mine) => a.EntityType switch
         {
             "Ticket" when a.Action == "TICKET_FORWARDED" => $"Your manager sent {mine.TicketNumbers.GetValueOrDefault(a.EntityId ?? string.Empty, "your query")} to the admin. You will be told when it is answered.",
-            "Payroll" => $"Payroll {mine.PayrollNames.GetValueOrDefault(a.EntityId ?? string.Empty, string.Empty)}: " + (a.Action == "PAYROLL_PAID" ? "your salary was paid." : "your salary was approved and will be paid."),
             "Employee" when a.Action is "EMPLOYEE_PASSWORD_RESET" => "The admin set a new password for you. Use it the next time you sign in.",
             "User" when a.Action is "USER_PASSWORD_RESET" => "The admin set a new password for you. Use it the next time you sign in.",
             _ => a.Details,

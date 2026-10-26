@@ -37,11 +37,11 @@ public partial class WorkforceManagementDbContext : DbContext
 
     public virtual DbSet<PaymentRule> PaymentRules { get; set; }
 
-    public virtual DbSet<SalaryStructure> SalaryStructures { get; set; }
+    public virtual DbSet<CompanyExpense> CompanyExpenses { get; set; }
 
-    public virtual DbSet<PayrollRun> PayrollRuns { get; set; }
+    public virtual DbSet<OwnerSettlement> OwnerSettlements { get; set; }
 
-    public virtual DbSet<PayrollItem> PayrollItems { get; set; }
+    public virtual DbSet<OwnerPayout> OwnerPayouts { get; set; }
 
     public virtual DbSet<Invoice> Invoices { get; set; }
 

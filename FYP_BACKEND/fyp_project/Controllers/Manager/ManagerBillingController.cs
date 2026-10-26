@@ -10,9 +10,9 @@ using Microsoft.EntityFrameworkCore;
 namespace fyp_project.Controllers.Manager
 {
     /// <summary>
-    /// Organization Manager portal: the invoices and payments of the organizations the manager handles. The manager can read them and mark
-    /// an invoice (or a payment) as verified after checking it. A draft invoice is shown (read only, marked Draft) but cannot be verified
-    /// until the admin issues it.
+    /// Organization Manager portal: the invoices and payments of the organizations the manager handles. The manager PREPARES the invoices
+    /// (a draft from the contract rates and the allocated hours, adjustable), sends them to the admin, and the admin verifies and issues them
+    /// (see InvoiceWorkflowService). The manager still checks (verifies) the payments of the organizations.
     /// </summary>
     [ApiController]
     [Authorize(Policy = "ManagerOnly")]
@@ -22,11 +22,13 @@ namespace fyp_project.Controllers.Manager
     {
         private readonly WorkforceManagementDbContext _db;
         private readonly AuditService _audit;
+        private readonly InvoiceWorkflowService _workflow;
 
-        public ManagerBillingController(WorkforceManagementDbContext db, AuditService audit)
+        public ManagerBillingController(WorkforceManagementDbContext db, AuditService audit, InvoiceWorkflowService workflow)
         {
             _db = db;
             _audit = audit;
+            _workflow = workflow;
         }
 
         private int? CurrentUserId
@@ -63,6 +65,7 @@ namespace fyp_project.Controllers.Manager
             var invoices = await MyInvoices(orgIds).Where(i => i.Status != InvoiceService.Cancelled && i.Status != InvoiceService.Draft)
                 .Select(i => new { i.Currency, i.TotalAmount, i.PaidAmount, i.Status, i.DueDate, i.VerifiedAt })
                 .ToListAsync();
+            var drafts = await MyInvoices(orgIds).Where(i => i.Status == InvoiceService.Draft).Select(i => new { i.SubmittedAt, i.ReturnedReason }).ToListAsync();
 
             var unverifiedPayments = await _db.InvoicePayments.AsNoTracking()
                 .CountAsync(p => p.VerifiedAt == null && _db.Invoices.Any(i => i.InvoiceId == p.InvoiceId && orgIds.Contains(i.OrgId) && i.Status != InvoiceService.Draft && i.Status != InvoiceService.Cancelled));
@@ -80,7 +83,9 @@ namespace fyp_project.Controllers.Manager
             {
                 currencies = perCurrency,
                 invoiceCount = invoices.Count,
-                unverifiedInvoices = invoices.Count(i => i.VerifiedAt == null),
+                draftsToSend = drafts.Count(d => d.SubmittedAt == null),
+                returnedDrafts = drafts.Count(d => d.SubmittedAt == null && d.ReturnedReason != null),
+                waitingForAdmin = drafts.Count(d => d.SubmittedAt != null),
                 unverifiedPayments,
             });
         }
@@ -108,7 +113,9 @@ namespace fyp_project.Controllers.Manager
 
             query = status switch
             {
-                "Draft" or "Paid" or "Cancelled" => query.Where(i => i.Status == status),
+                "Draft" => query.Where(i => i.Status == "Draft" && i.SubmittedAt == null),
+                "PendingVerification" => query.Where(i => i.Status == "Draft" && i.SubmittedAt != null),
+                "Paid" or "Cancelled" => query.Where(i => i.Status == status),
                 "Overdue" => query.Where(i => i.Status == "Issued" && i.PaidAmount < i.TotalAmount && i.DueDate != null && i.DueDate < today),
                 "PartiallyPaid" => query.Where(i => i.Status == "Issued" && i.PaidAmount > 0 && i.PaidAmount < i.TotalAmount && (i.DueDate == null || i.DueDate >= today)),
                 "Issued" => query.Where(i => i.Status == "Issued" && i.PaidAmount == 0 && (i.DueDate == null || i.DueDate >= today)),
@@ -117,7 +124,7 @@ namespace fyp_project.Controllers.Manager
 
             var total = await query.CountAsync();
 
-            var rows = await query.OrderByDescending(i => i.InvoiceId).Skip((page - 1) * pageSize).Take(pageSize)
+            var rows = await query.OrderByDescending(i => i.Status == "Draft").ThenByDescending(i => i.InvoiceId).Skip((page - 1) * pageSize).Take(pageSize)
                 .Select(i => new
                 {
                     invoiceId = i.InvoiceId,
@@ -134,6 +141,8 @@ namespace fyp_project.Controllers.Manager
                     dueDate = i.DueDate,
                     verifiedAt = i.VerifiedAt,
                     verifiedBy = _db.Users.Where(u => u.UserId == i.VerifiedBy).Select(u => u.Name).FirstOrDefault(),
+                    submittedAt = i.SubmittedAt,
+                    returnedReason = i.ReturnedReason,
                     unverifiedPayments = _db.InvoicePayments.Count(p => p.InvoiceId == i.InvoiceId && p.VerifiedAt == null),
                 })
                 .ToListAsync();
@@ -143,8 +152,8 @@ namespace fyp_project.Controllers.Manager
                 i.invoiceId, i.invoiceNumber, i.orgId, i.orgName, i.currency, i.periodStart, i.periodEnd, i.totalAmount, i.paidAmount,
                 balance = i.status == InvoiceService.Cancelled ? 0 : i.totalAmount - i.paidAmount,
                 i.status,
-                displayStatus = InvoiceService.DisplayStatus(i.status, i.totalAmount, i.paidAmount, i.dueDate, today),
-                i.issueDate, i.dueDate, i.verifiedAt, i.verifiedBy, i.unverifiedPayments,
+                displayStatus = i.status == InvoiceService.Draft ? (i.submittedAt != null ? "PendingVerification" : "Draft") : InvoiceService.DisplayStatus(i.status, i.totalAmount, i.paidAmount, i.dueDate, today),
+                i.issueDate, i.dueDate, i.verifiedAt, i.verifiedBy, i.submittedAt, i.returnedReason, i.unverifiedPayments,
             }).ToList();
 
             return Ok(new { items, total, page, pageSize });
@@ -183,12 +192,15 @@ namespace fyp_project.Controllers.Manager
                 paidAmount = invoice.PaidAmount,
                 balance = invoice.Status == InvoiceService.Cancelled ? 0 : invoice.TotalAmount - invoice.PaidAmount,
                 status = invoice.Status,
-                displayStatus = InvoiceService.DisplayStatus(invoice.Status, invoice.TotalAmount, invoice.PaidAmount, invoice.DueDate, today),
+                displayStatus = invoice.Status == InvoiceService.Draft ? InvoiceWorkflowService.StageOf(invoice) : InvoiceService.DisplayStatus(invoice.Status, invoice.TotalAmount, invoice.PaidAmount, invoice.DueDate, today),
                 issueDate = invoice.IssueDate,
                 dueDate = invoice.DueDate,
                 notes = invoice.Notes,
                 cancelReason = invoice.CancelReason,
-                canVerify = invoice.VerifiedAt == null && invoice.Status != InvoiceService.Cancelled && invoice.Status != InvoiceService.Draft,
+                canEdit = InvoiceWorkflowService.IsEditable(invoice),
+                waitingForAdmin = InvoiceWorkflowService.IsWaitingForAdmin(invoice),
+                submittedAt = invoice.SubmittedAt,
+                returnedReason = invoice.ReturnedReason,
                 verifiedAt = invoice.VerifiedAt,
                 verifiedBy = invoice.VerifiedBy.HasValue ? names.GetValueOrDefault(invoice.VerifiedBy.Value) : null,
                 lines = lines.Select(l => new { l.LineId, l.LineType, l.Description, l.Quantity, l.UnitRate, l.Amount }),
@@ -201,24 +213,83 @@ namespace fyp_project.Controllers.Manager
             });
         }
 
-        // POST api/manager/billing/invoices/5/verify
-        [HttpPost("invoices/{invoiceId:int}/verify")]
-        public async Task<IActionResult> VerifyInvoice(int invoiceId)
+        // ---------------------------------------------------------------- preparing invoices (the admin verifies them)
+
+        private async Task<Invoice?> MyInvoiceAsync(int invoiceId)
         {
             var orgIds = await MyOrganizationIdsAsync();
-            var invoice = await _db.Invoices.FirstOrDefaultAsync(i => i.InvoiceId == invoiceId && orgIds.Contains(i.OrgId));
-            if (invoice == null) return NotFound(new { message = "Invoice not found." });
-            if (invoice.Status == InvoiceService.Draft) return Conflict(new { message = "This invoice is still a draft. It can be verified after the administrator issues it." });
-            if (invoice.Status == InvoiceService.Cancelled) return Conflict(new { message = "A cancelled invoice cannot be verified." });
-            if (invoice.VerifiedAt != null) return Conflict(new { message = "This invoice is already verified." });
-
-            invoice.VerifiedAt = DateTime.UtcNow;
-            invoice.VerifiedBy = CurrentUserId;
-            await _db.SaveChangesAsync();
-
-            await _audit.LogAsync(CurrentUserId, "INVOICE_VERIFIED", "Invoice", invoiceId, $"Organization manager verified invoice {invoice.InvoiceNumber}");
-            return Ok(new { message = $"Invoice {invoice.InvoiceNumber} verified." });
+            return await _db.Invoices.FirstOrDefaultAsync(i => i.InvoiceId == invoiceId && orgIds.Contains(i.OrgId));
         }
+
+        private IActionResult Reply(WorkflowResult result) =>
+            result.Ok
+                ? Ok(new { message = result.Message, data = result.Data })
+                : result.Field != null
+                    ? BadRequest(new { message = result.Message, errors = new Dictionary<string, string[]> { [result.Field] = new[] { result.Message } } })
+                    : StatusCode(result.Status, new { message = result.Message });
+
+        // POST api/manager/billing/invoices/preview   { orgId, periodStart, periodEnd }   (nothing is saved)
+        [HttpPost("invoices/preview")]
+        public async Task<IActionResult> Preview([FromBody] InvoicePreviewRequest request, [FromServices] InvoiceService invoices)
+        {
+            if (!(await MyOrganizationIdsAsync()).Contains(request.OrgId)) return StatusCode(403, new { message = "You can only prepare invoices for the organizations you manage." });
+            var (preview, error) = await invoices.BuildPreviewAsync(request.OrgId, request.PeriodStart!.Value, request.PeriodEnd!.Value);
+            return preview == null ? BadRequest(new { message = error, errors = new Dictionary<string, string[]> { ["orgId"] = new[] { error! } } }) : Ok(preview);
+        }
+
+        // POST api/manager/billing/invoices   { orgId, periodStart, periodEnd, notes? }   (creates a Draft)
+        [HttpPost("invoices")]
+        public async Task<IActionResult> Create([FromBody] CreateInvoiceRequest request)
+        {
+            if (!(await MyOrganizationIdsAsync()).Contains(request.OrgId)) return StatusCode(403, new { message = "You can only prepare invoices for the organizations you manage." });
+            var result = await _workflow.CreateAsync(request.OrgId, request.PeriodStart!.Value, request.PeriodEnd!.Value, request.Notes, CurrentUserId);
+            return result.Ok && result.Data is CreatedInvoice created ? Ok(new { message = result.Message, invoiceId = created.InvoiceId, invoiceNumber = created.InvoiceNumber }) : Reply(result);
+        }
+
+        // POST api/manager/billing/invoices/5/recalculate
+        [HttpPost("invoices/{invoiceId:int}/recalculate")]
+        public async Task<IActionResult> Recalculate(int invoiceId)
+        {
+            var invoice = await MyInvoiceAsync(invoiceId);
+            return invoice == null ? NotFound(new { message = "Invoice not found." }) : Reply(await _workflow.RecalculateAsync(invoice, CurrentUserId));
+        }
+
+        // POST api/manager/billing/invoices/5/lines   { description, quantity, unitRate }
+        [HttpPost("invoices/{invoiceId:int}/lines")]
+        public async Task<IActionResult> AddLine(int invoiceId, [FromBody] AdjustmentLineRequest request)
+        {
+            var invoice = await MyInvoiceAsync(invoiceId);
+            return invoice == null ? NotFound(new { message = "Invoice not found." }) : Reply(await _workflow.AddAdjustmentAsync(invoice, request.Description, request.Quantity, request.UnitRate, CurrentUserId));
+        }
+
+        // DELETE api/manager/billing/invoices/5/lines/3
+        [HttpDelete("invoices/{invoiceId:int}/lines/{lineId:int}")]
+        public async Task<IActionResult> DeleteLine(int invoiceId, int lineId)
+        {
+            var invoice = await MyInvoiceAsync(invoiceId);
+            return invoice == null ? NotFound(new { message = "Invoice not found." }) : Reply(await _workflow.RemoveAdjustmentAsync(invoice, lineId, CurrentUserId));
+        }
+
+        // POST api/manager/billing/invoices/5/submit   (send the finished draft to the admin for verification)
+        [HttpPost("invoices/{invoiceId:int}/submit")]
+        public async Task<IActionResult> Submit(int invoiceId)
+        {
+            var invoice = await MyInvoiceAsync(invoiceId);
+            return invoice == null ? NotFound(new { message = "Invoice not found." }) : Reply(await _workflow.SubmitAsync(invoice, CurrentUserId));
+        }
+
+        // POST api/manager/billing/invoices/5/discard   { reason }   (throw away a draft that was not sent)
+        [HttpPost("invoices/{invoiceId:int}/discard")]
+        public async Task<IActionResult> Discard(int invoiceId, [FromBody] CancelInvoiceRequest request)
+        {
+            var invoice = await MyInvoiceAsync(invoiceId);
+            return invoice == null ? NotFound(new { message = "Invoice not found." }) : Reply(await _workflow.DiscardAsync(invoice, request.Reason, CurrentUserId));
+        }
+
+        // POST api/manager/billing/invoices/5/verify   (not the manager's job any more: the admin verifies invoices)
+        [HttpPost("invoices/{invoiceId:int}/verify")]
+        public IActionResult VerifyInvoice(int invoiceId) =>
+            Conflict(new { message = "Invoices are verified by the admin. Prepare the invoice and send it to the admin." });
 
         // GET api/manager/billing/payments?search=&organizationId=&verified=&page=1&pageSize=10
         [HttpGet("payments")]

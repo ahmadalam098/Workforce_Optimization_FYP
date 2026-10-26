@@ -7,7 +7,9 @@ const DETAIL_PAGES = {
   Contract: (id) => `/admin/contracts/${id}`,
   Shift: (id) => `/admin/shifts/${id}`,
   Invoice: (id) => `/admin/invoices/${id}`,
-  Payroll: (id) => `/admin/payroll/${id}`,
+  Expense: () => `/admin/expenses`,
+  Settlement: () => `/admin/balance-sheet`,
+  Payout: (id) => `/admin/documents/payout/${id}`,
   Ticket: (id) => `/admin/tickets/${id}`,
   WorkforceRequest: (id) => `/admin/requests/${id}`,
 }

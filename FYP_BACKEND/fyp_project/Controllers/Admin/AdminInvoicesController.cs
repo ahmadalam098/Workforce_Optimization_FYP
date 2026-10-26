@@ -8,13 +8,15 @@ namespace fyp_project.Controllers.Admin
 {
     /// <summary>
     /// Admin portal: what organizations owe the company.
-    /// Draft (built from contract rates and allocated hours, adjustable) -> Issued -> Paid, or Cancelled.
+    /// The organization manager prepares a Draft (contract rates x allocated hours, adjustable) and sends it here; the admin verifies it, which
+    /// issues it (Draft -> Issued), or sends it back to the manager with a reason, or cancels it. Issued -> Paid. The admin does not create invoices.
     /// </summary>
     [Route("api/admin/invoices")]
     public class AdminInvoicesController : AdminControllerBase
     {
         private readonly WorkforceManagementDbContext _db;
         private readonly InvoiceService _invoices;
+        private readonly InvoiceWorkflowService _workflow;
         private readonly PaymentRuleService _rules;
         private readonly ExchangeRateService _rates;
         private readonly PaymentService _payments;
@@ -23,6 +25,7 @@ namespace fyp_project.Controllers.Admin
         public AdminInvoicesController(
             WorkforceManagementDbContext db,
             InvoiceService invoices,
+            InvoiceWorkflowService workflow,
             PaymentRuleService rules,
             ExchangeRateService rates,
             PaymentService payments,
@@ -30,6 +33,7 @@ namespace fyp_project.Controllers.Admin
         {
             _db = db;
             _invoices = invoices;
+            _workflow = workflow;
             _rules = rules;
             _rates = rates;
             _payments = payments;
@@ -43,7 +47,8 @@ namespace fyp_project.Controllers.Admin
             (page, pageSize) = NormalizePaging(page, pageSize);
             var today = Money.Today;
 
-            var query = _db.Invoices.AsNoTracking().AsQueryable();
+            // A draft the organization manager is still preparing is not shown; the admin sees it once it is sent.
+            var query = _db.Invoices.AsNoTracking().Where(i => i.Status != InvoiceService.Draft || i.SubmittedAt != null);
 
             if (!string.IsNullOrWhiteSpace(search))
             {
@@ -57,7 +62,8 @@ namespace fyp_project.Controllers.Admin
 
             query = status switch
             {
-                "Draft" or "Paid" or "Cancelled" => query.Where(i => i.Status == status),
+                "Draft" or "PendingVerification" => query.Where(i => i.Status == "Draft"),
+                "Paid" or "Cancelled" => query.Where(i => i.Status == status),
                 "Overdue" => query.Where(i => i.Status == "Issued" && i.PaidAmount < i.TotalAmount && i.DueDate != null && i.DueDate < today),
                 "PartiallyPaid" => query.Where(i => i.Status == "Issued" && i.PaidAmount > 0 && i.PaidAmount < i.TotalAmount && (i.DueDate == null || i.DueDate >= today)),
                 "Issued" => query.Where(i => i.Status == "Issued" && i.PaidAmount == 0 && (i.DueDate == null || i.DueDate >= today)),
@@ -85,13 +91,14 @@ namespace fyp_project.Controllers.Admin
                     Status = i.Status,
                     IssueDate = i.IssueDate,
                     DueDate = i.DueDate,
+                    SubmittedAt = i.SubmittedAt,
                 })
                 .ToListAsync();
 
             foreach (var item in items)
             {
                 item.Balance = item.Status == InvoiceService.Cancelled ? 0 : item.TotalAmount - item.PaidAmount;
-                item.DisplayStatus = InvoiceService.DisplayStatus(item.Status, item.TotalAmount, item.PaidAmount, item.DueDate, today);
+                item.DisplayStatus = item.Status == InvoiceService.Draft ? "PendingVerification" : InvoiceService.DisplayStatus(item.Status, item.TotalAmount, item.PaidAmount, item.DueDate, today);
             }
 
             return Ok(new PagedResult<InvoiceListItemDto> { Items = items, Total = total, Page = page, PageSize = pageSize });
@@ -108,7 +115,7 @@ namespace fyp_project.Controllers.Admin
         private async Task<InvoiceDetailDto?> LoadDetailAsync(int invoiceId)
         {
             var invoice = await _db.Invoices.AsNoTracking().Include(i => i.Org).FirstOrDefaultAsync(i => i.InvoiceId == invoiceId);
-            if (invoice == null) return null;
+            if (invoice == null || (invoice.Status == InvoiceService.Draft && invoice.SubmittedAt == null)) return null;
 
             var today = Money.Today;
             var contractNumber = invoice.ContractId == null
@@ -121,6 +128,8 @@ namespace fyp_project.Controllers.Admin
             var userIds = payments.Where(p => p.RecordedBy.HasValue).Select(p => p.RecordedBy!.Value)
                 .Concat(payments.Where(p => p.VerifiedBy.HasValue).Select(p => p.VerifiedBy!.Value))
                 .Concat(invoice.VerifiedBy.HasValue ? new[] { invoice.VerifiedBy.Value } : Array.Empty<int>())
+                .Concat(invoice.CreatedBy.HasValue ? new[] { invoice.CreatedBy.Value } : Array.Empty<int>())
+                .Concat(invoice.SubmittedBy.HasValue ? new[] { invoice.SubmittedBy.Value } : Array.Empty<int>())
                 .Distinct().ToList();
             var names = await _db.Users.AsNoTracking().Where(u => userIds.Contains(u.UserId)).ToDictionaryAsync(u => u.UserId, u => u.Name);
 
@@ -137,9 +146,13 @@ namespace fyp_project.Controllers.Admin
                 PaidAmount = invoice.PaidAmount,
                 Balance = invoice.Status == InvoiceService.Cancelled ? 0 : invoice.TotalAmount - invoice.PaidAmount,
                 Status = invoice.Status,
-                DisplayStatus = InvoiceService.DisplayStatus(invoice.Status, invoice.TotalAmount, invoice.PaidAmount, invoice.DueDate, today),
+                DisplayStatus = invoice.Status == InvoiceService.Draft ? "PendingVerification" : InvoiceService.DisplayStatus(invoice.Status, invoice.TotalAmount, invoice.PaidAmount, invoice.DueDate, today),
                 IssueDate = invoice.IssueDate,
                 DueDate = invoice.DueDate,
+                SubmittedAt = invoice.SubmittedAt,
+                PreparedBy = invoice.CreatedBy.HasValue ? names.GetValueOrDefault(invoice.CreatedBy.Value) : null,
+                SubmittedBy = invoice.SubmittedBy.HasValue ? names.GetValueOrDefault(invoice.SubmittedBy.Value) : null,
+                ReturnedReason = invoice.ReturnedReason,
                 ContractId = invoice.ContractId,
                 ContractNumber = contractNumber,
                 Notes = invoice.Notes,
@@ -163,158 +176,24 @@ namespace fyp_project.Controllers.Admin
             };
         }
 
-        // POST api/admin/invoices/preview   (nothing is saved)
-        [HttpPost("preview")]
-        public async Task<IActionResult> Preview([FromBody] InvoicePreviewRequest request)
-        {
-            var (preview, error) = await _invoices.BuildPreviewAsync(request.OrgId, request.PeriodStart!.Value, request.PeriodEnd!.Value);
-            return preview == null ? FieldError("orgId", error!) : Ok(preview);
-        }
-
-        // POST api/admin/invoices   (creates a Draft from the same calculation as the preview)
-        [HttpPost]
-        public async Task<IActionResult> Create([FromBody] CreateInvoiceRequest request)
-        {
-            var start = request.PeriodStart!.Value;
-            var end = request.PeriodEnd!.Value;
-
-            var (preview, error) = await _invoices.BuildPreviewAsync(request.OrgId, start, end);
-            if (preview == null) return FieldError("orgId", error!);
-
-            var overlapping = await _db.Invoices
-                .AsNoTracking()
-                .Where(i => i.OrgId == request.OrgId && i.Status != InvoiceService.Cancelled && i.PeriodStart <= end && i.PeriodEnd >= start)
-                .Select(i => i.InvoiceNumber ?? ("#" + i.InvoiceId))
-                .FirstOrDefaultAsync();
-            if (overlapping != null)
-                return ConflictMessage($"Invoice {overlapping} already covers part of this period. Cancel it first or choose another period.");
-
-            await using var transaction = await _db.Database.BeginTransactionAsync();
-            var invoice = new Invoice
-            {
-                OrgId = request.OrgId,
-                ContractId = preview.ContractId,
-                PeriodStart = start,
-                PeriodEnd = end,
-                Currency = preview.Currency,
-                TotalAmount = preview.Total,
-                Status = InvoiceService.Draft,
-                Notes = ContractLogic.Clean(request.Notes),
-                CreatedBy = CurrentUserId,
-                CreatedAt = DateTime.UtcNow,
-            };
-            _db.Invoices.Add(invoice);
-            await _db.SaveChangesAsync();
-
-            invoice.InvoiceNumber = $"INV-{DateTime.UtcNow.Year}-{invoice.InvoiceId:0000}";
-            foreach (var line in preview.Lines)
-                _db.InvoiceLines.Add(new InvoiceLine
-                {
-                    InvoiceId = invoice.InvoiceId, LineType = line.LineType, Description = line.Description,
-                    Quantity = line.Quantity, UnitRate = line.UnitRate, Amount = line.Amount,
-                });
-            await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
-
-            await _audit.LogAsync(CurrentUserId, "INVOICE_CREATED", "Invoice", invoice.InvoiceId,
-                $"{invoice.InvoiceNumber} for {preview.OrgName}: {preview.Total:0.00} {preview.Currency}");
-
-            return CreatedAtAction(nameof(Get), new { invoiceId = invoice.InvoiceId },
-                new { message = "Draft invoice created.", invoiceId = invoice.InvoiceId, invoiceNumber = invoice.InvoiceNumber });
-        }
-
-        // POST api/admin/invoices/5/recalculate   (Draft only: rebuilds the Base/Extra lines, keeps adjustments)
-        [HttpPost("{invoiceId:int}/recalculate")]
-        public async Task<IActionResult> Recalculate(int invoiceId)
+        // POST api/admin/invoices/5/verify   (the admin verifies the invoice the manager sent: Draft -> Issued; the due date comes from the INVOICE_DUE_DAYS rule)
+        [HttpPost("{invoiceId:int}/verify")]
+        public async Task<IActionResult> Verify(int invoiceId)
         {
             var invoice = await _db.Invoices.FirstOrDefaultAsync(i => i.InvoiceId == invoiceId);
             if (invoice == null) return NotFoundMessage("Invoice not found.");
-            if (invoice.Status != InvoiceService.Draft) return ConflictMessage("Only draft invoices can be recalculated.");
-
-            var (preview, error) = await _invoices.BuildPreviewAsync(invoice.OrgId, invoice.PeriodStart, invoice.PeriodEnd);
-            if (preview == null) return ConflictMessage(error!);
-
-            var generated = await _db.InvoiceLines.Where(l => l.InvoiceId == invoiceId && l.LineType != "Adjustment").ToListAsync();
-            _db.InvoiceLines.RemoveRange(generated);
-
-            foreach (var line in preview.Lines)
-                _db.InvoiceLines.Add(new InvoiceLine
-                {
-                    InvoiceId = invoiceId, LineType = line.LineType, Description = line.Description,
-                    Quantity = line.Quantity, UnitRate = line.UnitRate, Amount = line.Amount,
-                });
-            await _db.SaveChangesAsync();
-
-            invoice.Currency = preview.Currency;
-            invoice.ContractId = preview.ContractId;
-            await RecomputeTotalAsync(invoice);
-
-            await _audit.LogAsync(CurrentUserId, "INVOICE_RECALCULATED", "Invoice", invoiceId, $"{invoice.InvoiceNumber}: {invoice.TotalAmount:0.00} {invoice.Currency}");
-            return Ok(new { message = "Invoice recalculated from the latest allocations.", invoiceId, total = invoice.TotalAmount });
+            var result = await _workflow.VerifyAndIssueAsync(invoice, CurrentUserId);
+            return result.Ok ? Ok(new { message = result.Message, invoiceId, dueDate = invoice.DueDate }) : StatusCode(result.Status, new { message = result.Message });
         }
 
-        // POST api/admin/invoices/5/lines   (Draft only: adds an adjustment, e.g. a minimum guarantee or a discount)
-        [HttpPost("{invoiceId:int}/lines")]
-        public async Task<IActionResult> AddLine(int invoiceId, [FromBody] AdjustmentLineRequest request)
+        // POST api/admin/invoices/5/return   { reason }   (back to the organization manager)
+        [HttpPost("{invoiceId:int}/return")]
+        public async Task<IActionResult> Return(int invoiceId, [FromBody] ReturnInvoiceRequest request)
         {
             var invoice = await _db.Invoices.FirstOrDefaultAsync(i => i.InvoiceId == invoiceId);
             if (invoice == null) return NotFoundMessage("Invoice not found.");
-            if (invoice.Status != InvoiceService.Draft) return ConflictMessage("Lines can only be changed while the invoice is a draft.");
-
-            _db.InvoiceLines.Add(new InvoiceLine
-            {
-                InvoiceId = invoiceId,
-                LineType = "Adjustment",
-                Description = request.Description.Trim(),
-                Quantity = request.Quantity,
-                UnitRate = request.UnitRate,
-                Amount = Money.Round(request.Quantity * request.UnitRate),
-            });
-            await _db.SaveChangesAsync();
-            await RecomputeTotalAsync(invoice);
-
-            await _audit.LogAsync(CurrentUserId, "INVOICE_LINE_ADDED", "Invoice", invoiceId, request.Description);
-            return Ok(new { message = "Line added.", invoiceId, total = invoice.TotalAmount });
-        }
-
-        // DELETE api/admin/invoices/5/lines/3   (Draft only, adjustment lines only)
-        [HttpDelete("{invoiceId:int}/lines/{lineId:int}")]
-        public async Task<IActionResult> DeleteLine(int invoiceId, int lineId)
-        {
-            var invoice = await _db.Invoices.FirstOrDefaultAsync(i => i.InvoiceId == invoiceId);
-            if (invoice == null) return NotFoundMessage("Invoice not found.");
-            if (invoice.Status != InvoiceService.Draft) return ConflictMessage("Lines can only be changed while the invoice is a draft.");
-
-            var line = await _db.InvoiceLines.FirstOrDefaultAsync(l => l.LineId == lineId && l.InvoiceId == invoiceId);
-            if (line == null) return NotFoundMessage("Line not found.");
-            if (line.LineType != "Adjustment") return ConflictMessage("Only adjustment lines can be removed. Use recalculate to rebuild the other lines.");
-
-            _db.InvoiceLines.Remove(line);
-            await _db.SaveChangesAsync();
-            await RecomputeTotalAsync(invoice);
-
-            await _audit.LogAsync(CurrentUserId, "INVOICE_LINE_REMOVED", "Invoice", invoiceId, line.Description);
-            return Ok(new { message = "Line removed.", invoiceId, total = invoice.TotalAmount });
-        }
-
-        // POST api/admin/invoices/5/issue   (Draft -> Issued; the due date comes from the INVOICE_DUE_DAYS payment rule)
-        [HttpPost("{invoiceId:int}/issue")]
-        public async Task<IActionResult> Issue(int invoiceId)
-        {
-            var invoice = await _db.Invoices.FirstOrDefaultAsync(i => i.InvoiceId == invoiceId);
-            if (invoice == null) return NotFoundMessage("Invoice not found.");
-            if (invoice.Status != InvoiceService.Draft) return ConflictMessage("Only draft invoices can be issued.");
-            if (invoice.TotalAmount <= 0) return ConflictMessage("The invoice total must be above zero before it can be issued.");
-
-            var dueDays = (int)await _rules.GetAsync(PaymentRuleService.InvoiceDueDays, 15);
-            invoice.Status = InvoiceService.Issued;
-            invoice.IssueDate = Money.Today;
-            invoice.DueDate = Money.Today.AddDays(Math.Max(0, dueDays));
-            await _db.SaveChangesAsync();
-
-            await _audit.LogAsync(CurrentUserId, "INVOICE_ISSUED", "Invoice", invoiceId,
-                $"{invoice.InvoiceNumber}: {invoice.TotalAmount:0.00} {invoice.Currency}, due {invoice.DueDate:yyyy-MM-dd}");
-            return Ok(new { message = $"Invoice issued. Due on {invoice.DueDate:yyyy-MM-dd}.", invoiceId, dueDate = invoice.DueDate });
+            var result = await _workflow.ReturnAsync(invoice, request.Reason, CurrentUserId);
+            return result.Ok ? Ok(new { message = result.Message, invoiceId }) : StatusCode(result.Status, new { message = result.Message });
         }
 
         // POST api/admin/invoices/5/cancel   (Draft or Issued without payments; reason required)
@@ -360,12 +239,6 @@ namespace fyp_project.Controllers.Admin
                 status = invoice.Status,
                 balance = invoice.TotalAmount - invoice.PaidAmount,
             });
-        }
-
-        private async Task RecomputeTotalAsync(Invoice invoice)
-        {
-            invoice.TotalAmount = await _db.InvoiceLines.Where(l => l.InvoiceId == invoice.InvoiceId).SumAsync(l => l.Amount);
-            await _db.SaveChangesAsync();
         }
     }
 }

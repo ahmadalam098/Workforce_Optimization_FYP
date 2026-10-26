@@ -46,10 +46,12 @@ namespace fyp_project.DTOs.Admin
         public decimal Balance { get; set; }
         /// <summary>Stored status: Draft / Issued / Paid / Cancelled.</summary>
         public string Status { get; set; } = string.Empty;
-        /// <summary>Draft / Issued / PartiallyPaid / Overdue / Paid / Cancelled (worked out from dates and payments).</summary>
+        /// <summary>Draft / PendingVerification (sent by the manager, waiting for the admin) / Issued / PartiallyPaid / Overdue / Paid / Cancelled.</summary>
         public string DisplayStatus { get; set; } = string.Empty;
         public DateOnly? IssueDate { get; set; }
         public DateOnly? DueDate { get; set; }
+        /// <summary>When the organization manager sent the draft to the admin (null = still being prepared).</summary>
+        public DateTime? SubmittedAt { get; set; }
     }
 
     public class InvoiceDetailDto : InvoiceListItemDto
@@ -59,9 +61,14 @@ namespace fyp_project.DTOs.Admin
         public string? Notes { get; set; }
         public string? CancelReason { get; set; }
         public DateTime CreatedAt { get; set; }
-        /// <summary>When the organization manager verified the invoice, and who.</summary>
+        /// <summary>When the ADMIN verified the invoice (and issued it), and who.</summary>
         public DateTime? VerifiedAt { get; set; }
         public string? VerifiedBy { get; set; }
+        /// <summary>Who prepared the draft (the organization manager) and who sent it to the admin.</summary>
+        public string? PreparedBy { get; set; }
+        public string? SubmittedBy { get; set; }
+        /// <summary>Why the admin sent it back to the manager (shown to the manager).</summary>
+        public string? ReturnedReason { get; set; }
         public List<InvoiceLineDto> Lines { get; set; } = new();
         public List<InvoicePaymentDto> Payments { get; set; } = new();
     }
@@ -118,6 +125,12 @@ namespace fyp_project.DTOs.Admin
         [Range(0.000001, 1000000)] public decimal? ExchangeRate { get; set; }
     }
 
+    /// <summary>The admin sends a draft back to the organization manager.</summary>
+    public class ReturnInvoiceRequest
+    {
+        [Required, StringLength(255), MinTrimmedLength(3)] public string Reason { get; set; } = string.Empty;
+    }
+
     public class CancelInvoiceRequest
     {
         [Required, StringLength(255), MinTrimmedLength(3)] public string Reason { get; set; } = string.Empty;
@@ -138,10 +151,12 @@ namespace fyp_project.DTOs.Admin
         public int DraftInvoices { get; set; }
         /// <summary>Payments received this month, in PKR (each payment converted at the rate stored with it).</summary>
         public decimal CollectedThisMonthPkr { get; set; }
-        /// <summary>Payroll runs of this month that are approved or paid, in PKR.</summary>
-        public decimal PayrollThisMonthPkr { get; set; }
-        /// <summary>Calculated, never stored: collected - payroll.</summary>
+        /// <summary>Expenses written down this month, in PKR.</summary>
+        public decimal ExpensesThisMonthPkr { get; set; }
+        /// <summary>Calculated, never stored: collected - expenses.</summary>
         public decimal ProfitThisMonthPkr { get; set; }
+        /// <summary>The profit not sent to the business owners yet (all time), in PKR.</summary>
+        public decimal AvailableToSendPkr { get; set; }
         public bool HasExchangeRate { get; set; }
     }
 
@@ -156,123 +171,6 @@ namespace fyp_project.DTOs.Admin
         public decimal Outstanding { get; set; }
         public decimal Overdue { get; set; }
         public DateTime? LastPaymentAt { get; set; }
-    }
-
-    // ---- Salaries ----
-
-    public class SalaryListItemDto
-    {
-        public int? UserId { get; set; }
-        public bool HasPicture { get; set; }
-        public int EmployeeId { get; set; }
-        public string? FullName { get; set; }
-        public string? Email { get; set; }
-        public string? OrganizationName { get; set; }
-        public int? StructureId { get; set; }
-        public decimal? MonthlySalary { get; set; }
-        public string? Currency { get; set; }
-        public DateOnly? EffectiveFrom { get; set; }
-        /// <summary>Months of the chosen year that were paid / are still unpaid (months before the first salary do not count).</summary>
-        public int PaidMonths { get; set; }
-        public int PendingMonths { get; set; }
-    }
-
-    public class SalaryStructureDto
-    {
-        public int StructureId { get; set; }
-        public decimal MonthlySalary { get; set; }
-        public string Currency { get; set; } = string.Empty;
-        public DateOnly EffectiveFrom { get; set; }
-        public DateOnly? EffectiveTo { get; set; }
-        public string? Notes { get; set; }
-        public string? CreatedBy { get; set; }
-        public DateTime CreatedAt { get; set; }
-    }
-
-    public class SaveSalaryRequest
-    {
-        [Range(0, 1000000000)] public decimal MonthlySalary { get; set; }
-        [Required, StringLength(10, MinimumLength = 3), RegularExpression(@"^[A-Za-z]{3}$", ErrorMessage = "Currency must be a 3-letter code such as PKR.")] public string Currency { get; set; } = "PKR";
-        public DateOnly? EffectiveFrom { get; set; }
-        [StringLength(255)] public string? Notes { get; set; }
-    }
-
-    // ---- Payroll ----
-
-    public class PayrollRunListItemDto
-    {
-        public int PayrollId { get; set; }
-        public int PeriodYear { get; set; }
-        public int PeriodMonth { get; set; }
-        public string Status { get; set; } = string.Empty;
-        public int EmployeeCount { get; set; }
-        public decimal TotalPkr { get; set; }
-        public DateTime CreatedAt { get; set; }
-        public DateTime? ApprovedAt { get; set; }
-        public DateTime? PaidAt { get; set; }
-    }
-
-    public class PayrollItemDto
-    {
-        public int ItemId { get; set; }
-        public int EmployeeId { get; set; }
-        public string? EmployeeName { get; set; }
-        public string Currency { get; set; } = string.Empty;
-        public decimal ExchangeRate { get; set; }
-        public decimal BaseSalary { get; set; }
-        public decimal OvertimeHours { get; set; }
-        public decimal OvertimeAmount { get; set; }
-        public decimal Adjustment { get; set; }
-        public string? AdjustmentNote { get; set; }
-        public decimal TotalAmount { get; set; }
-        public decimal TotalPkr { get; set; }
-    }
-
-    public class PayrollDetailDto : PayrollRunListItemDto
-    {
-        public string? Notes { get; set; }
-        public List<PayrollItemDto> Items { get; set; } = new();
-    }
-
-    public class CreatePayrollRequest
-    {
-        [Range(2000, 2100)] public int Year { get; set; }
-        [Range(1, 12)] public int Month { get; set; }
-        [StringLength(255)] public string? Notes { get; set; }
-    }
-
-    public class UpdatePayrollItemRequest
-    {
-        [Range(-1000000000, 1000000000)] public decimal Adjustment { get; set; }
-        [StringLength(255)] public string? AdjustmentNote { get; set; }
-    }
-
-    // ---- Overtime ----
-
-    public class OvertimeListItemDto
-    {
-        public int OvertimeId { get; set; }
-        public int? EmployeeId { get; set; }
-        public string? EmployeeName { get; set; }
-        public string? OrganizationName { get; set; }
-        public DateOnly? WorkDate { get; set; }
-        public decimal? TotalHours { get; set; }
-        public decimal? HourlyRate { get; set; }
-        public decimal? Amount { get; set; }
-        public string? Currency { get; set; }
-        public string? Status { get; set; }
-    }
-
-    public class CreateOvertimeRequest
-    {
-        [Range(1, int.MaxValue, ErrorMessage = "Select an employee.")]
-        public int EmployeeId { get; set; }
-
-        public int? OrganizationId { get; set; }
-
-        [Required] public DateOnly? WorkDate { get; set; }
-
-        [Range(0.25, 24)] public decimal TotalHours { get; set; }
     }
 
     // ---- Payment rules and exchange rates ----

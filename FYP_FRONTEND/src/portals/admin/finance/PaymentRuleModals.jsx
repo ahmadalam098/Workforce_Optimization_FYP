@@ -144,7 +144,7 @@ export function ExchangeRateModal({ onClose, onSaved }) {
   return (
     <Modal
       title="Add exchange rate"
-      subtitle="Used to convert payments and salaries to PKR. The newest rate on or before the date is used."
+      subtitle="Used to convert payments to PKR. The newest rate on or before the date is used."
       onClose={onClose}
       busy={submitting}
       footer={

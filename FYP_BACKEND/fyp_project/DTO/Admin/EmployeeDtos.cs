@@ -25,9 +25,6 @@ namespace fyp_project.DTOs.Admin
         public bool IsWorkingElsewhere { get; set; }
         public DateOnly? JoiningDate { get; set; }
         public string? AvailabilityStatus { get; set; }
-        /// <summary>The salary that is paid now (open salary record). Null when none is set.</summary>
-        public decimal? MonthlySalary { get; set; }
-        public string? SalaryCurrency { get; set; }
         public decimal? Rating { get; set; }
         public bool IsActive { get; set; }
         public List<string?> Skills { get; set; } = new();
@@ -117,10 +114,6 @@ namespace fyp_project.DTOs.Admin
         [StringLength(50)]
         public string? AvailabilityStatus { get; set; }
 
-        /// <summary>The monthly salary, set once when the employee is added (PKR). It can be changed later; the old amounts stay in the salary history.</summary>
-        [Required(ErrorMessage = "Monthly salary is required."), Range(1, 1000000000, ErrorMessage = "Monthly salary must be more than 0.")]
-        public decimal? MonthlySalary { get; set; }
-
         /// <summary>Skills the employee has (each with a level), saved together with the employee.</summary>
         public List<EmployeeSkillInput>? Skills { get; set; }
 
@@ -161,10 +154,6 @@ namespace fyp_project.DTOs.Admin
 
         [StringLength(255)]
         public string? StatusReason { get; set; }
-
-        /// <summary>Send a different amount to change the monthly salary: the new one starts today and the old one is kept in the history.</summary>
-        [Range(1, 1000000000, ErrorMessage = "Monthly salary must be more than 0.")]
-        public decimal? MonthlySalary { get; set; }
 
         /// <summary>When sent, this is the complete list of the employee's skills: new ones are added, listed ones updated, others removed.</summary>
         public List<EmployeeSkillInput>? Skills { get; set; }

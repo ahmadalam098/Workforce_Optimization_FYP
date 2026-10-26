@@ -78,6 +78,8 @@ export const organizationPaymentsApi = {
   startOnline: (body) => apiRequest('/api/organization/payments/online', { method: 'POST', body }),
   /** One of my checkouts: { status: 'Created' | 'Paid' | 'Failed' | 'Cancelled' | 'Expired', receiptNumber, paymentId, failureReason ... } */
   onlineStatus: (token, signal) => apiRequest(`/api/organization/payments/online/${token}`, { signal }),
+  /** Back from the gateway's page: the server asks the gateway how it ended. -> { outcome: paid | failed | cancelled | pending | unknown, detail, checkout } */
+  confirmOnline: (token, cancelled = false) => apiRequest(`/api/organization/payments/online/${token}/confirm`, { method: 'POST', params: { cancelled } }),
   /** My online payments: [{ token, invoiceId, invoiceNumber, amount, currency, status, failureReason, createdAt, completedAt, paymentId }] */
   onlineList: (signal) => apiRequest('/api/organization/payments/online', { signal }),
 }

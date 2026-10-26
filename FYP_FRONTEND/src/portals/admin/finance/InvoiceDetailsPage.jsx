@@ -9,7 +9,6 @@ import { useFetch } from '../../../hooks/useFetch.js'
 import LinkButton from '../../../components/ui/LinkButton.jsx'
 import { billingMailApi, invoicesApi } from '../../../services/admin/adminService.js'
 import { formatCurrency, formatDate, formatDateTime } from '../../../utils/format.js'
-import AdjustmentLineModal from './AdjustmentLineModal.jsx'
 import DecisionModal from '../shared/DecisionModal.jsx'
 import Notice from '../shared/Notice.jsx'
 import RecordPaymentModal from './RecordPaymentModal.jsx'
@@ -21,12 +20,10 @@ function InvoiceDetailsPage() {
   const { invoiceId } = useParams()
   const location = useLocation()
   const [notice, setNotice] = useState(location.state?.message ?? '')
-  const [addingLine, setAddingLine] = useState(false)
   const [paying, setPaying] = useState(false)
-  const [issuing, setIssuing] = useState(false)
+  const [verifying, setVerifying] = useState(false)
+  const [sendingBack, setSendingBack] = useState(false)
   const [cancelling, setCancelling] = useState(false)
-  const [lineToDelete, setLineToDelete] = useState(null)
-  const [recalculating, setRecalculating] = useState(false)
 
   const { data: invoice, error, loading, reload } = useFetch((signal) => invoicesApi.get(invoiceId, signal), `invoice-${invoiceId}`)
 
@@ -65,22 +62,22 @@ function InvoiceDetailsPage() {
     reload()
   }
 
-  async function handleIssue() {
-    const result = await invoicesApi.issue(invoice.invoiceId)
-    setIssuing(false)
-    done(result?.message || 'Invoice issued.')
+  async function handleVerify() {
+    const result = await invoicesApi.verify(invoice.invoiceId)
+    setVerifying(false)
+    done(result?.message || 'Invoice verified and issued.')
+  }
+
+  async function handleSendBack(reason) {
+    await invoicesApi.sendBack(invoice.invoiceId, reason)
+    setSendingBack(false)
+    done('Sent back to the organization manager.')
   }
 
   async function handleCancel(reason) {
     await invoicesApi.cancel(invoice.invoiceId, reason)
     setCancelling(false)
     done('Invoice cancelled.')
-  }
-
-  async function handleDeleteLine() {
-    await invoicesApi.deleteLine(invoice.invoiceId, lineToDelete.lineId)
-    setLineToDelete(null)
-    done('Line removed.')
   }
 
   async function sendMail(kind) {
@@ -90,12 +87,6 @@ function InvoiceDetailsPage() {
     } catch (problem) {
       setNotice(problem.message)
     }
-  }
-
-  async function handleRecalculate() {
-    const result = await invoicesApi.recalculate(invoice.invoiceId)
-    setRecalculating(false)
-    done(result?.message || 'Invoice recalculated.')
   }
 
   return (
@@ -117,7 +108,8 @@ function InvoiceDetailsPage() {
           </p>
           <div className="hero-card__badges">
             <WorkflowBadge status={invoice.displayStatus} />
-            {invoice.verifiedAt && <Badge tone="success" dot>Verified by {invoice.verifiedBy || 'the manager'} · {formatDate(invoice.verifiedAt)}</Badge>}
+            {invoice.verifiedAt && <Badge tone="success" dot>Verified by {invoice.verifiedBy || 'the admin'} · {formatDate(invoice.verifiedAt)}</Badge>}
+            {isDraft && invoice.preparedBy && <span className="cell-muted">Prepared by {invoice.preparedBy}{invoice.submittedAt && ` · sent ${formatDateTime(invoice.submittedAt)}`}</span>}
             {invoice.issueDate && <span className="cell-muted">Issued {formatDate(invoice.issueDate)}</span>}
             {invoice.dueDate && <span className="cell-muted">· due {formatDate(invoice.dueDate)}</span>}
           </div>
@@ -137,8 +129,13 @@ function InvoiceDetailsPage() {
             </Button>
           )}
           {isDraft && (
-            <Button onClick={() => setIssuing(true)}>
-              <Icon name="checkCircle" size={17} /> Issue invoice
+            <Button onClick={() => setVerifying(true)}>
+              <Icon name="checkCircle" size={17} /> Verify and issue
+            </Button>
+          )}
+          {isDraft && (
+            <Button variant="secondary" onClick={() => setSendingBack(true)}>
+              <Icon name="arrowLeft" size={17} /> Send back
             </Button>
           )}
           {isIssued && (
@@ -178,22 +175,24 @@ function InvoiceDetailsPage() {
         </section>
       )}
 
+      {isDraft && (
+        <section className="card">
+          <div className="card__body">
+            <p className="term-group__title">Waiting for your verification</p>
+            <p>
+              The organization manager{invoice.preparedBy ? ` (${invoice.preparedBy})` : ''} prepared this invoice from the contract rates and the allocated hours. Check the lines below. Verify it to issue it to {invoice.orgName}, or send it back to the manager
+              with what to fix.
+            </p>
+          </div>
+        </section>
+      )}
+
       <section className="card">
         <div className="card__header">
           <h3 className="card__title">Lines</h3>
-          {isDraft && (
-            <div className="page-header__actions">
-              <Button variant="secondary" onClick={() => setRecalculating(true)}>
-                <Icon name="refresh" size={16} /> Recalculate
-              </Button>
-              <Button variant="secondary" onClick={() => setAddingLine(true)}>
-                <Icon name="plus" size={16} /> Add adjustment
-              </Button>
-            </div>
-          )}
         </div>
         {invoice.lines.length === 0 ? (
-          <EmptyState icon="file" title="No lines" text="This invoice has no billable hours. Add an adjustment line (for example a minimum guarantee) or recalculate once employees are allocated." />
+          <EmptyState icon="file" title="No lines" text="This invoice has no billable lines." />
         ) : (
           <div className="table-wrap">
             <table className="data-table">
@@ -203,11 +202,6 @@ function InvoiceDetailsPage() {
                   <th className="num">Quantity</th>
                   <th className="num">Rate</th>
                   <th className="num">Amount</th>
-                  {isDraft && (
-                    <th>
-                      <span className="visually-hidden">Actions</span>
-                    </th>
-                  )}
                 </tr>
               </thead>
               <tbody>
@@ -219,17 +213,6 @@ function InvoiceDetailsPage() {
                     <td className="num">{line.quantity}</td>
                     <td className="num">{formatCurrency(line.unitRate, currency)}</td>
                     <td className="num">{formatCurrency(line.amount, currency)}</td>
-                    {isDraft && (
-                      <td>
-                        <div className="row-actions">
-                          {line.lineType === 'Adjustment' && (
-                            <button type="button" className="icon-btn icon-btn--danger" onClick={() => setLineToDelete(line)} aria-label={`Remove ${line.description}`} title="Remove">
-                              <Icon name="close" size={17} />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    )}
                   </tr>
                 ))}
               </tbody>
@@ -241,7 +224,6 @@ function InvoiceDetailsPage() {
                   <td className="num">
                     <strong>{formatCurrency(invoice.totalAmount, currency)}</strong>
                   </td>
-                  {isDraft && <td />}
                 </tr>
               </tfoot>
             </table>
@@ -294,17 +276,6 @@ function InvoiceDetailsPage() {
         )}
       </section>
 
-      {addingLine && (
-        <AdjustmentLineModal
-          invoice={invoice}
-          onClose={() => setAddingLine(false)}
-          onSaved={(message) => {
-            setAddingLine(false)
-            done(message)
-          }}
-        />
-      )}
-
       {paying && (
         <RecordPaymentModal
           invoice={invoice}
@@ -316,34 +287,25 @@ function InvoiceDetailsPage() {
         />
       )}
 
-      {issuing && (
+      {verifying && (
         <ConfirmDialog
-          title="Issue invoice?"
-          message={`${invoice.invoiceNumber} for ${formatCurrency(invoice.totalAmount, currency)} will be issued to ${invoice.orgName}. Its lines can no longer be changed, and the due date is set from the payment rules.`}
-          confirmLabel="Issue invoice"
-          onConfirm={handleIssue}
-          onCancel={() => setIssuing(false)}
+          title="Verify and issue invoice?"
+          message={`You confirm that you checked ${invoice.invoiceNumber} for ${formatCurrency(invoice.totalAmount, currency)}. It is issued to ${invoice.orgName} at once, its lines can no longer be changed, and the due date is set from the payment rules.`}
+          confirmLabel="Verify and issue"
+          onConfirm={handleVerify}
+          onCancel={() => setVerifying(false)}
         />
       )}
 
-      {recalculating && (
-        <ConfirmDialog
-          title="Recalculate from allocations?"
-          message="The generated lines are rebuilt from the latest allocations and contract rates. Your adjustment lines are kept."
-          confirmLabel="Recalculate"
-          onConfirm={handleRecalculate}
-          onCancel={() => setRecalculating(false)}
-        />
-      )}
-
-      {lineToDelete && (
-        <ConfirmDialog
-          title="Remove line?"
-          message={`"${lineToDelete.description}" will be removed from this draft.`}
-          confirmLabel="Remove"
-          danger
-          onConfirm={handleDeleteLine}
-          onCancel={() => setLineToDelete(null)}
+      {sendingBack && (
+        <DecisionModal
+          title="Send back to the manager?"
+          description="The organization manager sees your reason, fixes the invoice and sends it again."
+          label="What should be fixed?"
+          required
+          confirmLabel="Send back"
+          onSubmit={handleSendBack}
+          onClose={() => setSendingBack(false)}
         />
       )}
 

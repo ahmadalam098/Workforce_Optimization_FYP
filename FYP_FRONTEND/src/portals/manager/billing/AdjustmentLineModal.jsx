@@ -4,7 +4,7 @@ import TextField from '../../../components/ui/TextField.jsx'
 import Button from '../../../components/ui/Button.jsx'
 import Alert from '../../../components/ui/Alert.jsx'
 import { useFormFields } from '../../../hooks/useFormFields.js'
-import { invoicesApi } from '../../../services/admin/adminService.js'
+import { managerBillingApi } from '../../../services/manager/managerService.js'
 import { formatCurrency } from '../../../utils/format.js'
 import { onlyErrors, validateNumber, validateText } from '../../../utils/validators.js'
 
@@ -33,7 +33,7 @@ function AdjustmentLineModal({ invoice, onClose, onSaved }) {
     setSubmitting(true)
     setServerError('')
     try {
-      await invoicesApi.addLine(invoice.invoiceId, { description: form.description.trim(), quantity: Number(form.quantity), unitRate: Number(form.unitRate) })
+      await managerBillingApi.addInvoiceLine(invoice.invoiceId, { description: form.description.trim(), quantity: Number(form.quantity), unitRate: Number(form.unitRate) })
       onSaved('Line added.')
     } catch (error) {
       addServerErrors(error.fieldErrors)

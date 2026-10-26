@@ -27,11 +27,10 @@ namespace fyp_project.Controllers.Manager
         };
         private static readonly string[] InvoiceActions =
         {
-            "INVOICE_ISSUED", "INVOICE_CANCELLED", "INVOICE_PAYMENT_RECORDED",
+            "INVOICE_ISSUED", "INVOICE_CANCELLED", "INVOICE_PAYMENT_RECORDED", "INVOICE_RETURNED",
             "PAYMENT_SUBMITTED", "PAYMENT_SUBMISSION_APPROVED", "PAYMENT_SUBMISSION_REJECTED", "PAYMENT_SUBMISSION_WITHDRAWN",
         };
         private static readonly string[] TicketActions = { "TICKET_CREATED", "TICKET_RESOLVED", "TICKET_FORWARDED" };
-        private static readonly string[] PayrollActions = { "PAYROLL_APPROVED", "PAYROLL_PAID" };
 
         private readonly WorkforceManagementDbContext _db;
 
@@ -59,6 +58,8 @@ namespace fyp_project.Controllers.Manager
             ["OFFER_ACCEPTED"] = "An employee accepted an assignment",
             ["OFFER_DECLINED"] = "An employee declined an assignment",
             ["OFFER_FAILED"] = "An accepted assignment could not be made",
+            ["INVOICE_RETURNED"] = "The admin sent an invoice back to you",
+            ["INVOICE_ISSUED"] = "The admin verified and issued an invoice",
             ["PAYMENT_SUBMITTED"] = "An organization says it paid",
             ["PAYMENT_SUBMISSION_APPROVED"] = "A payment was approved",
             ["PAYMENT_SUBMISSION_REJECTED"] = "A payment notice was rejected",
@@ -103,7 +104,6 @@ namespace fyp_project.Controllers.Manager
                             (e.OrgId != null && orgIds.Contains(e.OrgId.Value) && !open.Any(a => a.EmployeeId == e.EmpId)))
                 .Select(e => e.EmpId).ToListAsync();
             var employeeKeys = employeeIds.Select(i => i.ToString()).ToList();
-            var payrollKeys = (await _db.PayrollItems.AsNoTracking().Where(i => employeeIds.Contains(i.EmpId)).Select(i => i.PayrollId).Distinct().ToListAsync()).Select(i => i.ToString()).ToList();
             var myKey = me.ToString();
 
             // Categories the manager switched off in Settings > Notifications.
@@ -111,7 +111,7 @@ namespace fyp_project.Controllers.Manager
             if (!pref.Requests) hidden.AddRange(new[] { "WorkforceRequest", "AssignmentOffer" });
             if (!pref.Queries) hidden.Add("Ticket");
             if (!pref.Invoices) hidden.Add("Invoice");
-            if (!pref.Employees) hidden.AddRange(new[] { "Employee", "EmployeeReview", "Allocation", "Payroll" });
+            if (!pref.Employees) hidden.AddRange(new[] { "Employee", "EmployeeReview", "Allocation" });
 
             return _db.AuditLogs.AsNoTracking().Where(a => a.ActorUserId != me && !hidden.Contains(a.EntityType!) && (
                 (a.EntityType == "Organization" && orgKeys.Contains(a.EntityId!) && !a.Action.StartsWith("ORGANIZATION_EMAIL")) ||
@@ -123,7 +123,6 @@ namespace fyp_project.Controllers.Manager
                 (a.EntityType == "Invoice" && invoiceKeys.Contains(a.EntityId!) && InvoiceActions.Contains(a.Action)) ||
                 (a.EntityType == "Ticket" && ticketKeys.Contains(a.EntityId!) && TicketActions.Contains(a.Action)) ||
                 (a.EntityType == "Employee" && employeeKeys.Contains(a.EntityId!) && EmployeeActions.Contains(a.Action)) ||
-                (a.EntityType == "Payroll" && payrollKeys.Contains(a.EntityId!) && PayrollActions.Contains(a.Action)) ||
                 (a.EntityType == "User" && a.EntityId == myKey && a.Action != "PROFILE_PICTURE_CHANGED" && a.Action != "PROFILE_PICTURE_REMOVED")));
         }
 

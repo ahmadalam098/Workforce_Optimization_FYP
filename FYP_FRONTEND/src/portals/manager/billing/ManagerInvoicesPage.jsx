@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import Badge from '../../../components/ui/Badge.jsx'
 import Button from '../../../components/ui/Button.jsx'
-import ConfirmDialog from '../../../components/ui/ConfirmDialog.jsx'
+import Icon from '../../../components/ui/Icon.jsx'
 import Pagination from '../../../components/ui/Pagination.jsx'
 import SelectField from '../../../components/ui/SelectField.jsx'
 import Spinner from '../../../components/ui/Spinner.jsx'
@@ -16,13 +16,15 @@ import '../../admin/finance/FinanceTiles.css'
 import Notice from '../../admin/shared/Notice.jsx'
 import PageHeader from '../../admin/shared/PageHeader.jsx'
 import { EmptyState, ErrorState } from '../../admin/shared/StateBox.jsx'
+import InvoiceCreateModal from './InvoiceCreateModal.jsx'
 import ViewButton from '../../admin/shared/ViewButton.jsx'
 import WorkflowBadge from '../../admin/shared/WorkflowBadge.jsx'
 
 const PAGE_SIZE = 10
 
 const STATUS_OPTIONS = [
-  { value: 'Draft', label: 'Draft' },
+  { value: 'Draft', label: 'My drafts (not sent yet)' },
+  { value: 'PendingVerification', label: 'Waiting for the admin' },
   { value: 'Issued', label: 'Issued' },
   { value: 'PartiallyPaid', label: 'Partly paid' },
   { value: 'Overdue', label: 'Overdue' },
@@ -31,8 +33,8 @@ const STATUS_OPTIONS = [
 ]
 
 const VERIFIED_OPTIONS = [
-  { value: 'false', label: 'Not verified yet' },
-  { value: 'true', label: 'Verified' },
+  { value: 'false', label: 'Not verified by the admin yet' },
+  { value: 'true', label: 'Verified by the admin' },
 ]
 
 export function VerifiedBadge({ verifiedAt, verifiedBy }) {
@@ -45,21 +47,22 @@ export function VerifiedBadge({ verifiedAt, verifiedBy }) {
   )
 }
 
-/** Organization Manager: the invoices of my organizations, with the money overview and verification. */
+/** Organization Manager: prepare the invoices of my organizations, send them to the admin (who verifies them), and follow the money. */
 function ManagerInvoicesPage() {
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [organizationId, setOrganizationId] = useState('')
   const [verified, setVerified] = useState('')
   const [page, setPage] = useState(1)
-  const [verifyTarget, setVerifyTarget] = useState(null)
+  const [creating, setCreating] = useState(false)
+  const navigate = useNavigate()
   const [notice, setNotice] = useFlashNotice()
 
   const debouncedSearch = useDebouncedValue(search)
   const params = { search: debouncedSearch.trim(), status, organizationId, verified, page, pageSize: PAGE_SIZE }
 
   const { data, error, loading, reload } = useFetch((signal) => managerBillingApi.invoices(params, signal), JSON.stringify(params))
-  const { data: summary, reload: reloadSummary } = useFetch((signal) => managerBillingApi.summary(signal), 'manager-billing-summary')
+  const { data: summary } = useFetch((signal) => managerBillingApi.summary(signal), 'manager-billing-summary')
   const { data: overview } = useFetch((signal) => managerApi.overview(signal), 'manager-overview')
 
   const organizations = overview?.organizations ?? []
@@ -72,17 +75,17 @@ function ManagerInvoicesPage() {
     setPage(1)
   }
 
-  async function handleVerify() {
-    const result = await managerBillingApi.verifyInvoice(verifyTarget.invoiceId)
-    setNotice(result?.message || 'Invoice verified.')
-    setVerifyTarget(null)
-    reload()
-    reloadSummary()
-  }
-
   return (
     <div className="page">
-      <PageHeader title="Invoices" description="What your organizations are billed. Drafts are shown for information; check each issued invoice and mark it as verified." />
+      <PageHeader
+        title="Invoices"
+        description="You prepare the invoices of your organizations from the contract rates and the allocated hours, check them and send them to the admin. The admin verifies each one, which issues it to the organization."
+        actions={
+          <Button onClick={() => setCreating(true)} disabled={organizations.length === 0}>
+            <Icon name="plus" size={18} /> New invoice
+          </Button>
+        }
+      />
       <Notice message={notice} onClose={() => setNotice('')} />
 
       {summary && (
@@ -105,11 +108,19 @@ function ManagerInvoicesPage() {
               </article>
             ))
           )}
-          <article className={`card finance-tile ${summary.unverifiedInvoices + summary.unverifiedPayments > 0 ? 'finance-tile--gold' : ''}`}>
-            <p className="finance-tile__label">To verify</p>
-            <p className="finance-tile__value">{summary.unverifiedInvoices + summary.unverifiedPayments}</p>
+          <article className={`card finance-tile ${summary.draftsToSend > 0 ? 'finance-tile--gold' : ''}`}>
+            <p className="finance-tile__label">Drafts to send</p>
+            <p className="finance-tile__value">{summary.draftsToSend}</p>
             <p className="finance-tile__caption">
-              {summary.unverifiedInvoices} invoice{summary.unverifiedInvoices === 1 ? '' : 's'}, {summary.unverifiedPayments} payment{summary.unverifiedPayments === 1 ? '' : 's'} (<Link to="/manager/payments">payments</Link>)
+              {summary.returnedDrafts > 0 ? `${summary.returnedDrafts} sent back by the admin · ` : ''}
+              {summary.waitingForAdmin} waiting for the admin
+            </p>
+          </article>
+          <article className={`card finance-tile ${summary.unverifiedPayments > 0 ? 'finance-tile--gold' : ''}`}>
+            <p className="finance-tile__label">Payments to verify</p>
+            <p className="finance-tile__value">{summary.unverifiedPayments}</p>
+            <p className="finance-tile__caption">
+              <Link to="/manager/payments">Open payments</Link>
             </p>
           </article>
         </section>
@@ -140,7 +151,7 @@ function ManagerInvoicesPage() {
         ) : !data && loading ? (
           <Spinner label="Loading invoices..." />
         ) : items.length === 0 ? (
-          <EmptyState icon="file" title="No invoices found" text={filtered ? 'Try changing or clearing the filters.' : 'Invoices appear here as soon as the administrator creates them.'} />
+          <EmptyState icon="file" title="No invoices found" text={filtered ? 'Try changing or clearing the filters.' : 'Press New invoice to prepare the first invoice for one of your organizations.'} />
         ) : (
           <>
             <div className="table-wrap" aria-busy={loading}>
@@ -154,11 +165,8 @@ function ManagerInvoicesPage() {
                     <th className="num">Balance</th>
                     <th>Status</th>
                     <th>Due</th>
-                    <th>Verification</th>
+                    <th>Admin check</th>
                     <th>View</th>
-                    <th>
-                      <span className="visually-hidden">Actions</span>
-                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -179,19 +187,20 @@ function ManagerInvoicesPage() {
                       </td>
                       <td className="cell-muted">{formatDate(invoice.dueDate)}</td>
                       <td>
-                        {invoice.status === 'Cancelled' ? <span className="cell-muted">—</span> : invoice.status === 'Draft' ? <span className="cell-muted">Not issued yet</span> : <VerifiedBadge verifiedAt={invoice.verifiedAt} verifiedBy={invoice.verifiedBy} />}
+                        {invoice.status === 'Cancelled' ? (
+                          <span className="cell-muted">—</span>
+                        ) : invoice.status === 'Draft' ? (
+                          <span className="cell-muted">{invoice.displayStatus === 'PendingVerification' ? 'With the admin' : invoice.returnedReason ? 'Sent back to you' : 'Not sent yet'}</span>
+                        ) : invoice.verifiedAt ? (
+                          <Badge tone="success" dot>
+                            Verified{invoice.verifiedBy ? ` by ${invoice.verifiedBy}` : ''}
+                          </Badge>
+                        ) : (
+                          <span className="cell-muted">—</span>
+                        )}
                       </td>
                       <td>
                         <ViewButton to={`/manager/invoices/${invoice.invoiceId}`} label={`View ${invoice.invoiceNumber}`} />
-                      </td>
-                      <td>
-                        <div className="row-actions">
-                          {!invoice.verifiedAt && invoice.status !== 'Cancelled' && invoice.status !== 'Draft' && (
-                            <Button variant="secondary" onClick={() => setVerifyTarget(invoice)}>
-                              Verify
-                            </Button>
-                          )}
-                        </div>
                       </td>
                     </tr>
                   ))}
@@ -203,13 +212,16 @@ function ManagerInvoicesPage() {
         )}
       </section>
 
-      {verifyTarget && (
-        <ConfirmDialog
-          title="Verify invoice?"
-          message={`You confirm that you checked invoice ${verifyTarget.invoiceNumber} (${formatCurrency(verifyTarget.totalAmount, verifyTarget.currency)}) for ${verifyTarget.orgName}.`}
-          confirmLabel="Verify"
-          onConfirm={handleVerify}
-          onCancel={() => setVerifyTarget(null)}
+      {creating && (
+        <InvoiceCreateModal
+          organizations={organizations}
+          onClose={() => setCreating(false)}
+          onCreated={(result) => {
+            setCreating(false)
+            setNotice(result.message || 'Draft invoice created.')
+            if (result.invoiceId) navigate(`/manager/invoices/${result.invoiceId}`)
+            else reload()
+          }}
         />
       )}
     </div>

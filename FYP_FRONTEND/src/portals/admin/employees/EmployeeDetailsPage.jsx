@@ -10,10 +10,9 @@ import Spinner from '../../../components/ui/Spinner.jsx'
 import { useFetch } from '../../../hooks/useFetch.js'
 import { employeeExtrasApi, employeesApi, organizationsApi, shiftsApi, skillsApi } from '../../../services/admin/adminService.js'
 import { emailSentence } from '../../../utils/emailNote.js'
-import { formatDate, formatCurrency, formatDateTime, humanize } from '../../../utils/format.js'
+import { formatDate, formatDateTime, humanize } from '../../../utils/format.js'
 import { formatTimeRange } from '../../../utils/contractFormat.js'
 import ChangeShiftModal from './ChangeShiftModal.jsx'
-import EmployeeBankCard from './EmployeeBankCard.jsx'
 import EmployeeFormModal from './EmployeeFormModal.jsx'
 import EmployeeSkillModal from './EmployeeSkillModal.jsx'
 import Notice from '../shared/Notice.jsx'
@@ -137,7 +136,6 @@ function EmployeeDetailsPage() {
             <InfoItem label="Organization">{employee.workingOrgName || employee.organizationName || 'Central pool (unassigned)'}</InfoItem>
             {employee.workingOrgName && employee.isWorkingElsewhere && <InfoItem label="Home organization">{employee.organizationName || 'Central pool'}</InfoItem>}
             <InfoItem label="Joining date">{employee.joiningDate ? formatDate(employee.joiningDate) : null}</InfoItem>
-            <InfoItem label="Monthly salary">{employee.monthlySalary != null ? formatCurrency(employee.monthlySalary, employee.salaryCurrency || 'PKR') : 'Not set'}</InfoItem>
             <InfoItem label="Phone">{employee.phone}</InfoItem>
             <InfoItem label="CNIC">{employee.cnic}</InfoItem>
             <InfoItem label="Age">{employee.age}</InfoItem>
@@ -181,8 +179,6 @@ function EmployeeDetailsPage() {
           </div>
         </section>
       </div>
-
-      <EmployeeBankCard employeeId={employee.employeeId} />
 
       <section className="card">
         <div className="card__header">

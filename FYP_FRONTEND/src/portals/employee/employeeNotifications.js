@@ -1,13 +1,11 @@
 // What the Employee bell links to, and the one alert it works out itself (today's shift), using the browser's local date and time.
 
-/** The employee page for a notification. The action matters because shifts and salary are both audited on the employee. */
+/** The employee page for a notification. The action matters because shifts and details are both audited on the employee. */
 export function employeeEntityLink(entityType, entityId, action = '') {
   if (entityType === 'Ticket' && entityId) return `/employee/queries/${entityId}`
-  if (entityType === 'Payroll') return '/employee/salary'
   if (action === 'OFFER_SENT') return '/employee/assignments'
   if (action === 'CALL_CUT_BY_MANAGER') return '/employee/calls'
   if (action.startsWith('SHIFT_')) return '/employee/shifts'
-  if (action.startsWith('SALARY_')) return '/employee/salary'
   return '/employee/dashboard'
 }
 

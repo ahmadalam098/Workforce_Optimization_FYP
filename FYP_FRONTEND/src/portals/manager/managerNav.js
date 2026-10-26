@@ -8,7 +8,6 @@ export const MANAGER_NAV_SECTIONS = [
     title: 'My organizations',
     items: [
       { label: 'Employee Pool', icon: 'users', to: '/manager/employee-pool', ready: true },
-      { label: 'Salary Status', icon: 'chart', to: '/manager/salaries', ready: true },
       { label: 'Performance Monitoring', icon: 'activity', to: '/manager/performance', ready: true },
       { label: 'My Organizations', icon: 'building', to: '/manager/organizations', ready: true },
       { label: 'Minimum Staff', icon: 'users', to: '/manager/minimum-staff', ready: true },

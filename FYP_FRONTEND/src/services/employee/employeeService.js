@@ -27,16 +27,6 @@ export const employeeShiftsApi = {
   mine: (signal) => apiRequest('/api/employee/shifts', { signal }),
 }
 
-export const employeeSalaryApi = {
-  /**
-   * The salary report of one year: { hasEmployeeRecord, year, years, currentSalary: { monthlySalary, currency, since, notes } | null,
-   * history: [{ monthlySalary, currency, from, to }], months: [{ month, status (Paid | Approved | Draft | NotProcessed | Upcoming | BeforeStart),
-   * statusLabel, currency, baseSalary, overtimeHours, overtimeAmount, adjustment, adjustmentNote, totalAmount, expectedAmount, paidAt }],
-   * summary: { paidMonths, pendingMonths, received: [{ currency, amount, months }], pending: [{ currency, amount, months }] } }
-   */
-  report: (year, signal) => apiRequest('/api/employee/salary', { params: { year: year || undefined }, signal }),
-}
-
 export const employeeHoursApi = {
   /**
    * Day by day between two dates (yyyy-MM-dd, at most 62 days): { hasEmployeeRecord, days: [{ date, shiftName, startTime, endTime,
@@ -75,10 +65,4 @@ export const employeeOffersApi = {
   /** Allocates me to the organization (the usual rules apply; if it cannot be done the offer fails and the message says why). */
   accept: (offerId) => apiRequest(`/api/employee/offers/${offerId}/accept`, { method: 'POST' }),
   decline: (offerId, note) => apiRequest(`/api/employee/offers/${offerId}/decline`, { method: 'POST', body: { note } }),
-}
-
-export const employeeBankApi = {
-  /** { hasEmployeeRecord, bank: { hasBank, bankName, accountTitle, accountNumber, updatedAt } } - where my salary is paid */
-  get: (signal) => apiRequest('/api/employee/bank', { signal }),
-  save: (body) => apiRequest('/api/employee/bank', { method: 'PUT', body }),
 }

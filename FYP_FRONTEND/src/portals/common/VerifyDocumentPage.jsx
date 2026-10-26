@@ -7,7 +7,7 @@ import { verifyApi } from '../../services/documents/documentsService.js'
 import { formatCurrency } from '../../utils/format.js'
 import './VerifyDocumentPage.css'
 
-const NAMES = { invoice: 'Invoice', receipt: 'Payment receipt', payslip: 'Salary slip' }
+const NAMES = { invoice: 'Invoice', receipt: 'Payment receipt', payout: 'Profit share receipt' }
 
 /** The public page a document's QR opens: says whether the number and code are genuine. No sign-in, and nothing private is shown. */
 function VerifyDocumentPage() {

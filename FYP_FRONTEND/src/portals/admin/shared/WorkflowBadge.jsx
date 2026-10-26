@@ -12,8 +12,9 @@ const TONES = {
   Completed: 'neutral',
   Reallocated: 'info',
   Cancelled: 'neutral',
-  // invoices and payroll
+  // invoices
   Draft: 'neutral',
+  PendingVerification: 'warning',
   Issued: 'info',
   PartiallyPaid: 'warning',
   Overdue: 'danger',
@@ -25,7 +26,7 @@ function WorkflowBadge({ status }) {
   if (!status) return <span className="cell-muted">—</span>
   return (
     <Badge tone={TONES[status] || 'neutral'} dot>
-      {humanize(status)}
+      {status === 'PendingVerification' ? 'Waiting for verification' : humanize(status)}
     </Badge>
   )
 }
