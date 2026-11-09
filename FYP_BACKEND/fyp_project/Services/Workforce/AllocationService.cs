@@ -122,7 +122,7 @@ namespace fyp_project.Services
             }
         }
 
-        private async Task AddHistoryAsync(int allocationId, int employeeId, int? fromOrgId, int? toOrgId, string action, string reason, int? actorUserId)
+        private async Task AddHistoryAsync(int allocationId, int employeeId, int? fromOrgId, int? toOrgId, string action, string reason, int? actorUserId, bool byAi = false)
         {
             _db.AllocationHistories.Add(new AllocationHistory
             {
@@ -135,12 +135,12 @@ namespace fyp_project.Services
                 ActionReason = AllocationLogic.Trim(reason, 255),
                 ActionTime = DateTime.UtcNow,
                 PerformedByUserId = actorUserId,
-                IsAllocatedByAi = false,
+                IsAllocatedByAi = byAi,
             });
             await _db.SaveChangesAsync();
         }
 
-        private async Task<EmployeeAllocation> NewAllocationAsync(
+        private async Task<EmployeeAllocation> NewAllocationAsync(string? source,
             int employeeId, int ownerOrgId, int assignOrgId, DateTime? expectedEnd, int? workforceRequestId)
         {
             var now = DateTime.UtcNow;
@@ -151,6 +151,7 @@ namespace fyp_project.Services
                 OwnerOrgId = ownerOrgId,
                 AssignOrgId = assignOrgId,
                 WorkforceRequestId = workforceRequestId,
+                Source = source,
                 AllocationType = ownerOrgId == assignOrgId ? AllocationLogic.Normal : AllocationLogic.Temporary,
                 StartDatetime = now,
                 ExpectedEndDatetime = expectedEnd,
@@ -171,7 +172,7 @@ namespace fyp_project.Services
 
         // ---------------------------------------------------------------- allocate
 
-        public async Task<AllocationOutcome> AllocateAsync(AllocateRequest request, int? actorUserId)
+        public async Task<AllocationOutcome> AllocateAsync(AllocateRequest request, int? actorUserId, bool byAi = false)
         {
             using var _ = await _ids.LockAsync();
 
@@ -215,11 +216,10 @@ namespace fyp_project.Services
 
                 var overridden = violations.Count > 0;
                 var reason = (overridden ? "[OVERRIDE] " : string.Empty) + request.Reason.Trim();
-                var allocation = await NewAllocationAsync(
-                    employee.EmpId, ownerOrgId, request.AssignOrgId, request.ExpectedEnd, request.WorkforceRequestId);
+                var allocation = await NewAllocationAsync(byAi ? (ownerOrgId == request.AssignOrgId ? "AI" : "Loan") : null,                    employee.EmpId, ownerOrgId, request.AssignOrgId, request.ExpectedEnd, request.WorkforceRequestId);
 
                 await AddHistoryAsync(allocation.AllocationId, employee.EmpId, employee.OrgId, request.AssignOrgId,
-                    AllocationLogic.ActionAllocated, reason, actorUserId);
+                    AllocationLogic.ActionAllocated, reason, actorUserId, byAi);
 
                 await _status.ChangeAsync(employee, "Assigned", $"Allocated to {assignOrg.OrgName}", actorUserId);
                 await _db.SaveChangesAsync();
@@ -268,7 +268,7 @@ namespace fyp_project.Services
                 current.Status = "Reallocated";
                 await _db.SaveChangesAsync();
 
-                var created = await NewAllocationAsync(employee.EmpId, ownerOrgId, request.AssignOrgId, request.ExpectedEnd, current.WorkforceRequestId);
+                var created = await NewAllocationAsync(null, employee.EmpId, ownerOrgId, request.AssignOrgId, request.ExpectedEnd, current.WorkforceRequestId);
 
                 await AddHistoryAsync(created.AllocationId, employee.EmpId, fromOrgId, request.AssignOrgId,
                     AllocationLogic.ActionReallocated, reason, actorUserId);
@@ -283,7 +283,7 @@ namespace fyp_project.Services
 
         // ---------------------------------------------------------------- release
 
-        public async Task<AllocationOutcome> ReleaseAsync(int allocationId, string reason, int? actorUserId)
+        public async Task<AllocationOutcome> ReleaseAsync(int allocationId, string reason, int? actorUserId, bool byAi = false)
         {
             using var _ = await _ids.LockAsync();
 
@@ -298,7 +298,7 @@ namespace fyp_project.Services
                 await _db.SaveChangesAsync();
 
                 await AddHistoryAsync(allocationId, employee.EmpId, allocation.AssignOrgId, employee.OrgId,
-                    AllocationLogic.ActionReleased, reason.Trim(), actorUserId);
+                    AllocationLogic.ActionReleased, reason.Trim(), actorUserId, byAi);
 
                 await _status.ChangeAsync(employee, "Available", $"Released from {allocation.AssignOrg?.OrgName}", actorUserId);
                 await _db.SaveChangesAsync();

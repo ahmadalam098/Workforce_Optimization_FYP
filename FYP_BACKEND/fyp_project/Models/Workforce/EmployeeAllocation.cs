@@ -31,6 +31,14 @@ public partial class EmployeeAllocation
     [System.ComponentModel.DataAnnotations.Schema.Column("daily_contract_id")]
     public int? DailyContractId { get; set; }
 
+    /// <summary>Who made the assignment: "AI" (the autopilot), "Loan" (borrowed from another organization by the AI) or empty / "Manual" (a person). Migration 025.</summary>
+    [System.ComponentModel.DataAnnotations.Schema.Column("source")]
+    public string? Source { get; set; }
+
+    /// <summary>The organization manager locked this assignment: the AI never releases or moves it. Migration 025.</summary>
+    [System.ComponentModel.DataAnnotations.Schema.Column("locked")]
+    public bool Locked { get; set; }
+
     public virtual ICollection<AllocationHistory> AllocationHistories { get; set; } = new List<AllocationHistory>();
 
     public virtual Organization? AssignOrg { get; set; }

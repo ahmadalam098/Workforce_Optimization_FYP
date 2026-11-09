@@ -83,6 +83,12 @@ public partial class WorkforceManagementDbContext : DbContext
 
     public virtual DbSet<WorkforceRequestSkill> WorkforceRequestSkills { get; set; }
 
+    public virtual DbSet<AutopilotSetting> AutopilotSettings { get; set; }
+
+    public virtual DbSet<AiDecision> AiDecisions { get; set; }
+
+    public virtual DbSet<EmployeeLoan> EmployeeLoans { get; set; }
+
     public virtual DbSet<TicketMessage> TicketMessages { get; set; }
 
     public virtual DbSet<Complaint> Complaints { get; set; }

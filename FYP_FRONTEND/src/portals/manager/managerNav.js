@@ -11,6 +11,7 @@ export const MANAGER_NAV_SECTIONS = [
       { label: 'Performance Monitoring', icon: 'activity', to: '/manager/performance', ready: true },
       { label: 'My Organizations', icon: 'building', to: '/manager/organizations', ready: true },
       { label: 'Minimum Staff', icon: 'users', to: '/manager/minimum-staff', ready: true },
+      { label: 'AI Autopilot', icon: 'sparkles', to: '/manager/autopilot', ready: true },
       { label: 'Staff Requests', icon: 'inbox', to: '/manager/requests', ready: true },
       { label: 'Assignment Offers', icon: 'send', to: '/manager/offers', ready: true },
       { label: 'Employee Reviews', icon: 'activity', to: '/manager/reviews', ready: true },

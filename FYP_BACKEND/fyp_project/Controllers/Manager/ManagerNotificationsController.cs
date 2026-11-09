@@ -72,6 +72,12 @@ namespace fyp_project.Controllers.Manager
             ["WORKFORCE_REQUEST_APPROVED"] = "Staff request approved",
             ["WORKFORCE_REQUEST_REJECTED"] = "Staff request rejected",
             ["WORKFORCE_REQUEST_CANCELLED"] = "Staff request cancelled",
+            ["AI_ALLOCATED"] = "The AI placed an employee",
+            ["AI_LOAN_STARTED"] = "The AI lent an employee",
+            ["AI_RELEASED"] = "The AI released an employee",
+            ["AI_RECALL_REQUESTED"] = "An employee is being recalled",
+            ["AI_RECALL_COMPLETED"] = "A lent employee went back",
+            ["AI_DECISION_UNDONE"] = "An AI decision was undone",
         };
 
         private static string TitleOf(string action)

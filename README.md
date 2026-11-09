@@ -9,8 +9,9 @@ Smart Workforce Optimization and Resource Sharing System for Multi-Organization 
 | `FYP_FRONTEND/` | React 19 + Vite web app (Admin portal built; other portals to come) |
 | `FYP_BACKEND/` | ASP.NET Core (.NET 10) API, EF Core + SQL Server, JWT in an HttpOnly cookie |
 | `FYP_CHAT/` | Node.js + Socket.IO real-time chat server (organization manager <-> organizations); see its README |
+| `FYP_AI/` | Python (FastAPI) planner service for the AI autopilot (optional: the backend has a built-in planner); see `docs/AI_AUTOPILOT.md` |
 | `FYP_DB/` | `WorkforceManagementDB_Complete.sql` (base schema) and `migrations/` (run after the base script, in number order) |
-| `docs/` | `BACKEND_API_REFERENCE.md` (every API endpoint), `FYP_REQUIREMENTS.md` (scope), `UI_AND_DB_REVIEW.md` (design review) |
+| `docs/` | `BACKEND_API_REFERENCE.md` (every API endpoint), `AI_AUTOPILOT.md` (the AI design), `FYP_REQUIREMENTS.md` (scope), `UI_AND_DB_REVIEW.md` (design review) |
 
 ## Code layout
 
@@ -42,9 +43,10 @@ Validation/   shared validation attributes
 
 ## Run it locally
 
-1. **Database** - in SQL Server / LocalDB run `FYP_DB/WorkforceManagementDB_Complete.sql`, then every file in `FYP_DB/migrations/` in order (001, 002, 003, 005 ... 012).
+1. **Database** - in SQL Server / LocalDB run `FYP_DB/WorkforceManagementDB_Complete.sql`, then every file in `FYP_DB/migrations/` in order (001, 002, 003, 005 ... 025). Optional demo data: `FYP_DB/seed/ai_demo_data.sql` (every demo password is `Ali@12345`).
 2. **Backend** - copy `FYP_BACKEND/fyp_project/appsettings.example.json` to `appsettings.json`, fill in your own values (database, Redis, JWT key, Gmail app password), then `dotnet run` inside `FYP_BACKEND/fyp_project`.
 3. **Chat server (optional)** - inside `FYP_CHAT`: `npm install`, `npm run init-env`, `npm start` (needs migration 012 and `Chat:ServiceKey` in appsettings.json).
-4. **Frontend** - inside `FYP_FRONTEND`: copy `.env.example` to `.env`, then `npm install` and `npm run dev`.
+4. **AI planner (optional)** - see `FYP_AI/README.md`; without it the backend's built-in planner is used.
+5. **Frontend** - inside `FYP_FRONTEND`: copy `.env.example` to `.env`, then `npm install` and `npm run dev`.
 
 Secrets (`appsettings.json`, `.env`) are git-ignored and must never be committed.

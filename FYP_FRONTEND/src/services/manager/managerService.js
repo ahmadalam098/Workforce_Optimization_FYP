@@ -166,3 +166,28 @@ export const managerSettingsApi = {
   notifications: (signal) => apiRequest('/api/manager/settings/notifications', { signal }),
   saveNotifications: (body) => apiRequest('/api/manager/settings/notifications', { method: 'PUT', body }),
 }
+
+export const managerAutopilotApi = {
+  /**
+   * { planner: { configured, reachable, mode ('AI service' | 'Built-in') }, recallMinutes, serverTime, organizations: [{ orgId, orgName, enabled,
+   * lastRunAt, lastMessage, contractId, contractNumber, isDaily, window, min, max, have, atOrg, missing, borrowingAllowed, problem,
+   * working: [{ allocationId, employeeId, name, source ('Manual' | 'AI' | 'Loan'), locked, isLoan, homeOrgName, isMinimum, since, until }] }] }
+   */
+  overview: (signal) => apiRequest('/api/manager/autopilot', { signal }),
+  /** Switch the autopilot of an organization on or off. Turning it on plans and places the missing employees right away. */
+  setEnabled: (orgId, enabled) => apiRequest(`/api/manager/autopilot/${orgId}/enabled`, { method: 'PUT', body: { enabled } }),
+  /** apply false = only write suggestions to review; apply true = place the employees now. */
+  run: (orgId, apply) => apiRequest(`/api/manager/autopilot/${orgId}/run`, { method: 'POST', body: { apply } }),
+  /** params: { orgId, status ('Suggested' | 'Applied' | 'Rejected' | 'Undone' | 'Failed'), page, pageSize } -> { items, total, page, pageSize } */
+  decisions: (params, signal) => apiRequest('/api/manager/autopilot/decisions', { params, signal }),
+  apply: (decisionId) => apiRequest(`/api/manager/autopilot/decisions/${decisionId}/apply`, { method: 'POST' }),
+  reject: (decisionId, note) => apiRequest(`/api/manager/autopilot/decisions/${decisionId}/reject`, { method: 'POST', body: { note } }),
+  undo: (decisionId) => apiRequest(`/api/manager/autopilot/decisions/${decisionId}/undo`, { method: 'POST' }),
+  /** The AI never releases or moves a locked assignment. */
+  lock: (allocationId, locked) => apiRequest(`/api/manager/autopilot/allocations/${allocationId}/lock`, { method: 'POST', body: { locked } }),
+  /** { serverTime, items: [{ loanId, employeeName, lenderOrgName, borrowerOrgName, status ('Lent' | 'RecallRequested' | 'Returned'), recallDeadline, iAmLender, iAmBorrower, ... }] } */
+  loans: (signal) => apiRequest('/api/manager/autopilot/loans', { signal }),
+  /** The owner asks for the employee back: the borrower has a few minutes (3), then the employee goes back. */
+  recall: (loanId, reason) => apiRequest(`/api/manager/autopilot/loans/${loanId}/recall`, { method: 'POST', body: { reason } }),
+  returnNow: (loanId) => apiRequest(`/api/manager/autopilot/loans/${loanId}/return`, { method: 'POST' }),
+}

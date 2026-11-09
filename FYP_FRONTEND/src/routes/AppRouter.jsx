@@ -27,6 +27,7 @@ const OrganizationContractDetailsPage = lazy(() => import('../portals/organizati
 const OrganizationRequestsPage = lazy(() => import('../portals/organization/requests/OrganizationRequestsPage.jsx'))
 const OrganizationRequestDetailsPage = lazy(() => import('../portals/organization/requests/OrganizationRequestDetailsPage.jsx'))
 const ManagerMinimumStaffPage = lazy(() => import('../portals/manager/minimum/ManagerMinimumStaffPage.jsx'))
+const AutopilotPage = lazy(() => import('../portals/manager/autopilot/AutopilotPage.jsx'))
 const OrganizationChatPage = lazy(() => import('../portals/organization/chat/OrganizationChatPage.jsx'))
 const OrganizationEmployeesPage = lazy(() => import('../portals/organization/employees/OrganizationEmployeesPage.jsx'))
 const OrganizationEmployeeDetailsPage = lazy(() => import('../portals/organization/employees/OrganizationEmployeeDetailsPage.jsx'))
@@ -204,6 +205,7 @@ function AppRouter() {
             <Route path="requests/:requestId" element={<ManagerRequestDetailsPage />} />
             <Route path="employees/:employeeId" element={<ManagerEmployeeDetailsPage />} />
             <Route path="minimum-staff" element={<ManagerMinimumStaffPage />} />
+            <Route path="autopilot" element={<AutopilotPage />} />
             <Route path="organizations" element={<ManagerOrganizationsPage />} />
             <Route path="organizations/:orgId" element={<ManagerOrganizationDetailsPage />} />
             <Route path="chat" element={<ManagerChatPage />} />
