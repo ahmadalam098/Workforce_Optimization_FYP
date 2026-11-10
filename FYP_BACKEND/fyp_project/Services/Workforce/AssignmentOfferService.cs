@@ -19,9 +19,11 @@ namespace fyp_project.Services
         private readonly AllocationService _allocations;
         private readonly DailyStaffingService _daily;
         private readonly AuditService _audit;
+        private readonly AutopilotService _autopilot;
 
-        public AssignmentOfferService(WorkforceManagementDbContext db, AllocationService allocations, DailyStaffingService daily, AuditService audit)
+        public AssignmentOfferService(WorkforceManagementDbContext db, AllocationService allocations, DailyStaffingService daily, AuditService audit, AutopilotService autopilot)
         {
+            _autopilot = autopilot;
             _db = db;
             _allocations = allocations;
             _daily = daily;
@@ -126,6 +128,14 @@ namespace fyp_project.Services
             if (offer == null) return (404, "Offer not found.", null);
             if (offer.Status != AssignmentOffer.Pending) return (409, $"This offer is {offer.Status.ToLower()}.", offer);
 
+            // An offer the AI autopilot sent is carried out by the autopilot (it may also lend the employee from their own organization).
+            var aiDecision = await _autopilot.DecisionOfOfferAsync(offer.OfferId);
+            if (aiDecision != null)
+            {
+                var (status, message) = await _autopilot.AcceptOfferAsync(offer, aiDecision, employeeUserId);
+                return (status, message, offer);
+            }
+
             string? failure = null;
             int? allocationId = null;
             var orgName = await _db.Organizations.AsNoTracking().Where(o => o.OrgId == offer.OrgId).Select(o => o.OrgName).FirstOrDefaultAsync();
@@ -219,6 +229,7 @@ namespace fyp_project.Services
             offer.Note = ContractLogic.Clean(note);
             await _db.SaveChangesAsync();
             await _audit.LogAsync(employeeUserId, "OFFER_DECLINED", "AssignmentOffer", offerId, offer.Note == null ? "The employee declined the offer" : $"The employee declined the offer: {offer.Note}");
+            await _autopilot.OfferEndedAsync(offerId, AiDecision.Declined, offer.Note == null ? "The employee declined the offer." : $"The employee declined: {offer.Note}");
             return (200, "You declined the offer.");
         }
 
@@ -232,6 +243,7 @@ namespace fyp_project.Services
             offer.RespondedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
             await _audit.LogAsync(managerUserId, "OFFER_CANCELLED", "AssignmentOffer", offerId, "The manager cancelled the offer");
+            await _autopilot.OfferEndedAsync(offerId, AiDecision.Undone, "The manager cancelled the offer.");
             return (200, "Offer cancelled.");
         }
     }

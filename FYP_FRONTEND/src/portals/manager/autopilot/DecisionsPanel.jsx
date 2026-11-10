@@ -12,13 +12,17 @@ import { formatDateTime } from '../../../utils/format.js'
 import { EmptyState, ErrorState } from '../../admin/shared/StateBox.jsx'
 
 const PAGE_SIZE = 10
-const STATUS_TONE = { Suggested: 'warning', Applied: 'success', Rejected: 'neutral', Undone: 'neutral', Failed: 'danger' }
+const STATUS_TONE = { Suggested: 'warning', Offered: 'info', Applied: 'success', Rejected: 'neutral', Undone: 'neutral', Failed: 'danger', Declined: 'neutral', Expired: 'neutral' }
+const STATUS_TEXT = { Suggested: 'Waiting for you', Offered: 'Waiting for the employee', Declined: 'Employee declined', Expired: 'No answer in time' }
 const KIND_TEXT = { Minimum: 'Contract minimum', Request: 'Staff request', Substitute: 'Replacement' }
 const PART_TEXT = { skill: 'Skill', rating: 'Rating', ownership: 'Own staff', returning: 'Worked here', idle: 'Idle' }
 const STATUS_OPTIONS = [
   { value: '', label: 'All decisions' },
   { value: 'Suggested', label: 'Waiting for you' },
+  { value: 'Offered', label: 'Waiting for the employee' },
   { value: 'Applied', label: 'Applied' },
+  { value: 'Declined', label: 'Declined by the employee' },
+  { value: 'Expired', label: 'Offer expired' },
   { value: 'Rejected', label: 'Rejected' },
   { value: 'Undone', label: 'Undone' },
   { value: 'Failed', label: 'Could not be placed' },
@@ -52,7 +56,7 @@ function Why({ decision }) {
         </p>
       )}
       <p className="cell-muted">
-        Decided by the {decision.planner} · {decision.triggerBy === 'Manager' ? 'you asked for it' : 'autopilot'}
+        Decided by the {decision.planner === 'AI service' ? 'AI service' : 'built-in planner'} · {decision.triggerBy === 'Manager' ? 'you asked for it' : 'autopilot'}
         {decision.note ? ` · ${decision.note}` : ''}
       </p>
     </div>
@@ -149,9 +153,9 @@ function DecisionsPanel({ orgs, refreshKey, onChanged, onNotice }) {
                       </td>
                       <td>
                         <Badge tone={STATUS_TONE[decision.status] ?? 'neutral'} dot>
-                          {decision.status === 'Suggested' ? 'Waiting for you' : decision.status}
+                          {STATUS_TEXT[decision.status] ?? decision.status}
                         </Badge>
-                        {decision.status === 'Failed' && decision.note && <span className="person__sub">{decision.note}</span>}
+                        {['Failed', 'Declined', 'Expired'].includes(decision.status) && decision.note && <span className="person__sub">{decision.note}</span>}
                       </td>
                       <td className="cell-muted cell-date">{formatDateTime(decision.createdAt)}</td>
                       <td>
@@ -171,7 +175,7 @@ function DecisionsPanel({ orgs, refreshKey, onChanged, onNotice }) {
                           )}
                           {decision.canUndo && (
                             <Button variant="secondary" onClick={() => setUndoing(decision)}>
-                              Undo
+                              {decision.status === 'Offered' ? 'Cancel offer' : 'Undo'}
                             </Button>
                           )}
                         </div>
@@ -195,9 +199,9 @@ function DecisionsPanel({ orgs, refreshKey, onChanged, onNotice }) {
 
       {undoing && (
         <ConfirmDialog
-          title="Undo this AI decision?"
-          message={`${undoing.employeeName} is released from ${undoing.orgName} and is free again.`}
-          confirmLabel="Undo"
+          title={undoing.status === 'Offered' ? 'Cancel this offer?' : 'Undo this AI decision?'}
+          message={undoing.status === 'Offered' ? `The offer to ${undoing.employeeName} is withdrawn.` : `${undoing.employeeName} is released from ${undoing.orgName} and is free again. The AI will not place them again for an hour.`}
+          confirmLabel={undoing.status === 'Offered' ? 'Cancel offer' : 'Undo'}
           danger
           onCancel={() => setUndoing(null)}
           onConfirm={async () => {

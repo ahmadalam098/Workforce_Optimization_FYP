@@ -20,14 +20,19 @@ namespace fyp_project.Services
             var now = DateTime.UtcNow;
             var open = _db.EmployeeAllocations.Where(AllocationLogic.IsOpen);
 
-            // 1. the contract time of an AI assignment is over: the employee goes back to the pool
-            var expired = await open.Where(a => (a.Source == "AI" || a.Source == "Loan") && !a.Locked && a.ExpectedEndDatetime != null && a.ExpectedEndDatetime <= now)
-                .Select(a => new { a.AllocationId, a.AssignOrgId }).ToListAsync();
+            // 0. offers of the AI that nobody answered in time
+            touched.UnionWith(await ExpireAiOffersAsync());
+
+            // 1. the end time of an assignment is over (whoever made it: the AI or a person), unless it is locked: the employee goes back to the pool
+            var expired = await open.Where(a => !a.Locked && a.ExpectedEndDatetime != null && a.ExpectedEndDatetime <= now)
+                .Select(a => new { a.AllocationId, a.AssignOrgId, a.Source }).ToListAsync();
             foreach (var item in expired)
             {
-                var outcome = await _allocations.ReleaseAsync(item.AllocationId, "The contract time ended (AI)", null, byAi: true);
+                var byAi = item.Source == "AI" || item.Source == "Loan";
+                var outcome = await _allocations.ReleaseAsync(item.AllocationId, "The end time passed", null, byAi: true);
                 if (!outcome.Success) continue;
-                await _audit.LogAsync(null, "AI_RELEASED", "Allocation", item.AllocationId, "The contract time ended, so the AI released the employee back to the pool.");
+                await _audit.LogAsync(null, byAi ? "AI_RELEASED" : "EMPLOYEE_RELEASED", "Allocation", item.AllocationId,
+                    "The end time of the assignment passed, so the employee went back to the pool.");
                 if (item.AssignOrgId != null) touched.Add(item.AssignOrgId.Value);
             }
 
@@ -173,7 +178,11 @@ namespace fyp_project.Services
             if (missing <= 0) return 0;
 
             var pending = await _db.EmployeeLoans.CountAsync(l => l.LenderOrgId == orgId && l.Status == EmployeeLoan.RecallRequested);
-            var need = missing - pending;
+            // The organization's own free employees fill the minimum first; only what they cannot fill is recalled.
+            var open = _db.EmployeeAllocations.AsNoTracking().Where(AllocationLogic.IsOpen);
+            var ownFree = await _db.Employees.AsNoTracking().CountAsync(e => e.OrgId == orgId && e.User!.IsActive == true && !open.Any(a => a.EmployeeId == e.EmpId)
+                && AllocationLogic.AvailableStatuses.Contains(e.AvailabilityStatus ?? string.Empty));
+            var need = missing - pending - ownFree;
             if (need <= 0) return 0;
 
             var lockedIds = await _db.EmployeeAllocations.Where(AllocationLogic.IsOpen).Where(a => a.Locked).Select(a => a.AllocationId).ToListAsync();

@@ -44,18 +44,27 @@ namespace fyp_project.Services
                 using var scope = _scopes.CreateScope();
                 var autopilot = scope.ServiceProvider.GetRequiredService<AutopilotService>();
 
+                var clock = System.Diagnostics.Stopwatch.StartNew();
                 var touched = await autopilot.MaintainAsync();
+                var maintainMs = clock.ElapsedMilliseconds;
                 var enabled = await autopilot.EnabledOrgIdsAsync();
                 foreach (var orgId in enabled)
                 {
                     if (stoppingToken.IsCancellationRequested) break;
+                    // An organization that is short first asks for its own lent employees back, then plans (it does not borrow for those coming back).
+                    var orgClock = System.Diagnostics.Stopwatch.StartNew();
+                    await autopilot.RecallIfNeededAsync(orgId);
+                    var recallMs = orgClock.ElapsedMilliseconds;
                     var result = await autopilot.RunOrgAsync(orgId, apply: true, "Autopilot", null, stoppingToken);
+                    if (orgClock.ElapsedMilliseconds > 1000)
+                        _logger.LogWarning("Autopilot: organization {Org} took {Ms} ms (recall check {Recall} ms).", orgId, orgClock.ElapsedMilliseconds, recallMs);
                     if (result.Applied > 0) _logger.LogInformation("Autopilot: {Message}", result.Message);
                     touched.Remove(orgId);
-                    await autopilot.RecallIfNeededAsync(orgId);
                 }
                 // Organizations changed by a finished loan or a recall (and not planned above) are planned again.
                 await autopilot.RefreshAsync(touched);
+                if (clock.ElapsedMilliseconds > 5000)
+                    _logger.LogWarning("Autopilot tick: {Orgs} organization(s) in {Ms} ms (maintenance {Maintain} ms).", enabled.Count, clock.ElapsedMilliseconds, maintainMs);
             }
             catch (Exception ex) when (SafeQuery.IsMissingSchema(ex))
             {

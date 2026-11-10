@@ -113,6 +113,8 @@ namespace fyp_project.Controllers.Manager
                     orgId = org.OrgId,
                     orgName = org.OrgName,
                     enabled = setting?.Enabled ?? false,
+                    askEmployees = setting?.AskEmployees ?? true,
+                    offersWaiting = await _db.AssignmentOffers.AsNoTracking().CountAsync(o => o.OrgId == org.OrgId && o.Status == AssignmentOffer.Pending && o.Note == AutopilotService.AiOfferNote),
                     lastRunAt = setting?.LastRunAt,
                     lastMessage = setting?.LastMessage,
                     contractId = state.Contract?.ContractId,
@@ -134,6 +136,7 @@ namespace fyp_project.Controllers.Manager
             {
                 planner = new { configured = _planner.IsConfigured, reachable = await _planner.IsReachableAsync(), mode = _planner.IsConfigured && await _planner.IsReachableAsync() ? PlannerGateway.ServiceName : LocalPlanner.Name },
                 recallMinutes = _autopilot.RecallMinutes,
+                offerMinutes = _autopilot.OfferMinutes,
                 serverTime = DateTime.UtcNow,
                 organizations = result,
             });
@@ -149,6 +152,15 @@ namespace fyp_project.Controllers.Manager
 
             var run = await _autopilot.RunOrgAsync(orgId, apply: true, "Manager", CurrentUserId);
             return Ok(new { message = "Autopilot is on. " + run.Message, run });
+        }
+
+        // PUT api/manager/autopilot/5/ask-employees   { enabled }   (true: the AI sends offers the employees accept or decline; false: it places at once)
+        [HttpPut("{orgId:int}/ask-employees")]
+        public async Task<IActionResult> AskEmployees(int orgId, [FromBody] AutopilotSwitchRequest body)
+        {
+            if (!(await MyOrganizationIdsAsync()).Contains(orgId)) return NotFound(new { message = "Organization not found." });
+            await _autopilot.SetAskEmployeesAsync(orgId, body.Enabled, CurrentUserId);
+            return Ok(new { message = body.Enabled ? "The AI now asks each employee first: they get an offer to accept or decline." : "The AI now places employees at once (they are told)." });
         }
 
         // POST api/manager/autopilot/5/run   { apply }
@@ -202,7 +214,7 @@ namespace fyp_project.Controllers.Manager
                 createdAt = d.CreatedAt,
                 decidedAt = d.DecidedAt,
                 canApply = d.Status == AiDecision.Suggested,
-                canUndo = d.Status == AiDecision.Applied && d.AllocationId != null && openAllocations.Contains(d.AllocationId.Value),
+                canUndo = (d.Status == AiDecision.Applied && d.AllocationId != null && openAllocations.Contains(d.AllocationId.Value)) || d.Status == AiDecision.Offered,
                 allocationId = d.AllocationId,
             });
             return Ok(new { items, total, page, pageSize });

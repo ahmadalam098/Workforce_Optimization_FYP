@@ -4,11 +4,13 @@ For the manager of an organization: one switch, **Autopilot**. When it is on, th
 
 ## What the AI does
 
-1. **Keeps the contract minimum.** Each contract has a minimum number of employees (for a daily contract: for the daily time window). The AI places the missing ones, choosing the best fit. When the window or the contract time ends, it releases them and they go back to the pool.
-2. **Matches new staff requests.** A new staff request (Pending) or an approved one is filled with the employees whose skills fit best, most urgent request first. Many requests at the same time are planned together, so one employee is never used twice. A new request is approved by the AI when it places the first employee (the same as when the manager presses Allocate). A request is staffed from 60 minutes before it starts until it ends.
-3. **Borrows when the pool is empty.** If the organization has no free employee and the contract allows borrowing, the AI takes a **spare** employee from another organization: one who works at home above their organization's contract minimum, is not locked, not busy and not on a call.
-4. **Recalls.** When the owner organization needs its employee back (its own minimum is short), the borrower gets **3 minutes**, a replacement is suggested, then the employee goes back.
-5. **The manager has the last word.** Suggest only (nothing changes), apply or reject each suggestion, undo what was applied, lock an employee so the AI never moves them, recall or return a loan, and use the normal allocation screens as before. Every choice shows **Why?**: the reason in words, the parts of the score and the next best choices.
+1. **Asks the employee first.** By default the chosen employee gets an **offer** in My Assignments and is placed only after accepting. If they decline, or do not answer within 10 minutes, the AI asks somebody else (a decliner is not asked again by that organization for a day). The manager can switch an organization to "Placing at once".
+2. **Keeps the contract minimum.** Each contract has a minimum number of employees (for a daily contract: for the daily time window). The AI chooses the best fit for the missing places. When the end time of any assignment passes (made by the AI or by a person, unless it is locked), the employee goes back to the pool.
+3. **Matches new staff requests.** A new staff request (Pending) or an approved one is filled with the employees whose skills fit best, most urgent request first. Many requests at the same time are planned together, so one employee is never used twice. A new request is approved by the AI when it places the first employee (the same as when the manager presses Allocate). A request is staffed from 60 minutes before it starts until it ends.
+4. **Borrows only when needed.** Own employees always come first. If the organization has nobody suitable and the contract allows borrowing, the AI takes an employee of another organization: a free one (only above what that organization still needs for its own minimum) or a **spare** one who works at home above their organization's contract minimum, is not locked, not busy and not on a call.
+5. **Recalls.** When the owner organization needs its employee back (its own minimum is short and its own free people cannot fill it), the borrower gets **3 minutes**, a replacement is suggested, then the employee goes back. An owner asks for its own lent employees back before it borrows from a third organization.
+6. **A person's choice is kept.** If a manager or the admin releases minimum staff, or undoes an AI decision, that place stays empty for 60 minutes (the manager wanted fewer people) and that employee is not placed again for 60 minutes. "Place now" fills the place at once.
+7. **The manager has the last word.** Suggest only (nothing changes), apply or reject each suggestion, undo what was applied, lock an employee so the AI never moves them, recall or return a loan, and use the normal allocation screens as before. Every choice shows **Why?**: the reason in words, the parts of the score and the next best choices.
 
 ## How a choice is made
 
@@ -67,7 +69,7 @@ Manager portal (React)  --->  ASP.NET backend  --->  SQL Server (the truth)
 
 Answer: `{ "assignments": [{ "taskId", "empId", "score", "reason", "breakdown": { "skill": 80, ... }, "alternatives": [{ "empId", "score" }] }], "unfilled": [{ "taskId", "missing", "why" }] }`.
 
-## Database (migration 025)
+## Database (migrations 025 and 026)
 
 - `Autopilot_Setting` - the switch per organization, the last run and its message.
 - `AI_Decision` - every choice: who, for what, score, reason, breakdown, alternatives, status (Suggested / Applied / Rejected / Undone / Failed), planner, who triggered it.
@@ -82,3 +84,15 @@ Answer: `{ "assignments": [{ "taskId", "empId", "score", "reason", "breakdown": 
 4. Settings: `Ai:RecallMinutes` (3), `Ai:TickSeconds` (15), `Ai:ServiceKey` (shared secret with `FYP_AI`).
 
 Note: the demo contracts are not "Daily" (they have no daily billing version), so their minimum is kept until it is released, not per day.
+
+Migration 026 adds `Autopilot_Setting.ask_employees` (default 1) and `AI_Decision.offer_id`; decisions can then also be Offered, Declined or Expired. The backend creates the tables and columns of 025 and 026 by itself when it starts (`Services/Ai/AiSchema.cs`), so an older database keeps working; running the migrations by hand is still fine.
+
+## Tested
+
+A full test run on a copy of the database (about 270 checks): autopilot on and off; suggest, apply, reject, undo and lock; offers accepted, declined and expired; staff requests (new and approved, priorities, start and end times, rejected and cancelled); borrowing; manual and automatic recalls with the 3-minute deadline; every portal's numbers against the database; the manager's AI Autopilot page and the employee's My Assignments page in Chrome; a database without migrations 025/026; 103 organizations with 605 employees (first round with 281 placements: 14 s, later rounds: under 1 s); and the real FYP_AI service: `python -m pytest tests` (7 tests), and the Python planner choosing exactly the same employees and scores as the built-in one in 41 decisions.
+
+## Development settings
+
+- `EmailSettings:PickupDirectory`: when set, emails are written as .eml files into that folder instead of being sent (for testing; nothing leaves the computer).
+- `Ai:OfferMinutes` (10): how long an offer of the AI waits for the employee.
+- `FYP_DB/seed/ai_demo_refresh.sql`: makes the demo staff requests current again for a new demo day (safe to run any time).

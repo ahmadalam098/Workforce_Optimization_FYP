@@ -43,6 +43,15 @@ namespace fyp_project.Services
                 Text = body
             };
 
+            // Development: write the email to a file instead of sending it (EmailSettings:PickupDirectory).
+            if (!string.IsNullOrWhiteSpace(_settings.PickupDirectory))
+            {
+                Directory.CreateDirectory(_settings.PickupDirectory);
+                var file = Path.Combine(_settings.PickupDirectory, $"{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}-{Guid.NewGuid():N}.eml");
+                await email.WriteToAsync(file);
+                return;
+            }
+
             using var smtp = new SmtpClient();
 
             await smtp.ConnectAsync(

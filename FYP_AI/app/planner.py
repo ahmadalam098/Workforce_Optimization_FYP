@@ -7,6 +7,7 @@ Every allowed (task, employee) pair gets a score from 0 to 100:
   organization, a spare employee lent by another organization last) + worked for this organization recently + idle.
 Then the pairs are taken best first, the most urgent task first; for a task that needs a skill, the employees who have it always come
 before the ones who do not (those are taken only when nobody with the skill is free, and the reason says so).
+Among equals the organization's own employees come before employees of other organizations, so nobody is borrowed while an own employee fits.
 """
 
 from typing import Dict, List, Set, Tuple
@@ -99,13 +100,13 @@ def plan(request: PlanRequest) -> PlanResponse:
     left: Dict[str, int] = {t.taskId: t.needed for t in request.tasks}
     assignments: List[PlanAssignment] = []
 
-    for task, c, score, skill, rating, ownership, returning, idle, has_skill in sorted(pairs, key=lambda p: (p[0].priority, not p[8], -p[2], p[1].empId)):
+    for task, c, score, skill, rating, ownership, returning, idle, has_skill in sorted(pairs, key=lambda p: (p[0].priority, not p[8], p[1].ownerOrgId != p[0].orgId, -p[2], p[1].empId)):
         if left[task.taskId] <= 0 or c.empId in used:
             continue
         used.add(c.empId)
         left[task.taskId] -= 1
 
-        others = sorted((p for p in pairs if p[0].taskId == task.taskId and p[1].empId != c.empId), key=lambda p: (not p[8], -p[2]))[:3]
+        others = sorted((p for p in pairs if p[0].taskId == task.taskId and p[1].empId != c.empId), key=lambda p: (not p[8], p[1].ownerOrgId != p[0].orgId, -p[2]))[:3]
         assignments.append(
             PlanAssignment(
                 taskId=task.taskId,

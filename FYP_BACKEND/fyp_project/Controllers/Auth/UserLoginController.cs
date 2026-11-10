@@ -203,7 +203,7 @@ namespace fyp_project.Controllers
                         HttpOnly = true,
 
                         // Secure cookies require HTTPS.
-                        Secure = true,
+                        Secure = Request.IsHttps,
 
                         SameSite = SameSiteMode.Strict,
 

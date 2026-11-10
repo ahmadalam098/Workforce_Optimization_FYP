@@ -176,6 +176,8 @@ export const managerAutopilotApi = {
   overview: (signal) => apiRequest('/api/manager/autopilot', { signal }),
   /** Switch the autopilot of an organization on or off. Turning it on plans and places the missing employees right away. */
   setEnabled: (orgId, enabled) => apiRequest(`/api/manager/autopilot/${orgId}/enabled`, { method: 'PUT', body: { enabled } }),
+  /** true (default): the AI sends each chosen employee an offer to accept or decline; false: it places them at once. */
+  setAskEmployees: (orgId, enabled) => apiRequest(`/api/manager/autopilot/${orgId}/ask-employees`, { method: 'PUT', body: { enabled } }),
   /** apply false = only write suggestions to review; apply true = place the employees now. */
   run: (orgId, apply) => apiRequest(`/api/manager/autopilot/${orgId}/run`, { method: 'POST', body: { apply } }),
   /** params: { orgId, status ('Suggested' | 'Applied' | 'Rejected' | 'Undone' | 'Failed'), page, pageSize } -> { items, total, page, pageSize } */

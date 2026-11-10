@@ -102,7 +102,20 @@ function OrganizationAutopilotCard({ org, onChanged, onNotice }) {
           <Button variant="secondary" loading={busy === 'run'} disabled={noContract} onClick={() => act('run', () => managerAutopilotApi.run(org.orgId, true))}>
             <Icon name="play" size={17} /> Place now
           </Button>
+          <Button
+            variant="secondary"
+            loading={busy === 'ask'}
+            title={org.askEmployees ? 'The employee gets an offer and is placed only after accepting. Click to place at once instead.' : 'Employees are placed at once. Click to ask them first.'}
+            onClick={() => act('ask', () => managerAutopilotApi.setAskEmployees(org.orgId, !org.askEmployees))}
+          >
+            <Icon name="user" size={17} /> {org.askEmployees ? 'Asking employees first' : 'Placing at once'}
+          </Button>
         </div>
+        <p className="cell-muted">
+          {org.askEmployees
+            ? `The AI sends each chosen employee an offer; they are placed when they accept. Offers waiting: ${org.offersWaiting}.`
+            : 'The AI places employees at once; they are told in their notifications.'}
+        </p>
 
         {org.working.length === 0 ? (
           <p className="cell-muted">Nobody works for this organization right now.</p>

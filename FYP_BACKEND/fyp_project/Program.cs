@@ -281,6 +281,12 @@ builder.Services.AddAuthorization(options =>
 
 var app = builder.Build();
 
+// The AI tables and columns (migrations 025, 026) are created here when missing, so an older database keeps working.
+using (var scope = app.Services.CreateScope())
+{
+    await AiSchema.EnsureAsync(scope.ServiceProvider.GetRequiredService<WorkforceManagementDbContext>(), app.Logger);
+}
+
 
 // =====================================================
 // DEVELOPMENT
@@ -296,7 +302,7 @@ if (app.Environment.IsDevelopment())
 // HTTPS REDIRECTION
 // =====================================================
 
-// The Safepay webhook comes through ngrok to http://localhost:5089; a redirect to https://localhost would never reach us, so it is left out.
+// The Safepay webhook comes through ngrok to http://192.168.100.17:5089; a redirect to https://localhost would never reach us, so it is left out.
 app.UseWhen(context => !context.Request.Path.StartsWithSegments("/api/gateway/safepay"), branch => branch.UseHttpsRedirection());
 
 

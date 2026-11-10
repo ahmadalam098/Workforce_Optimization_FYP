@@ -97,10 +97,13 @@ namespace fyp_project.Controllers.Manager
         private readonly WorkforceManagementDbContext _db;
         private readonly AssignmentOfferService _offers;
 
-        public EmployeeOffersController(WorkforceManagementDbContext db, AssignmentOfferService offers)
+        private readonly AutopilotService _autopilot;
+
+        public EmployeeOffersController(WorkforceManagementDbContext db, AssignmentOfferService offers, AutopilotService autopilot)
         {
             _db = db;
             _offers = offers;
+            _autopilot = autopilot;
         }
 
         private int Me => int.TryParse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("nameid")?.Value ?? User.FindFirst("sub")?.Value, out var id) ? id : 0;
@@ -110,6 +113,7 @@ namespace fyp_project.Controllers.Manager
         public async Task<IActionResult> List()
         {
             await _offers.ExpireAsync();
+            var aiMinutes = _autopilot.OfferMinutes;
             var rows = await (from o in _db.AssignmentOffers.AsNoTracking()
                               join e in _db.Employees.AsNoTracking() on o.EmpId equals e.EmpId
                               join org in _db.Organizations.AsNoTracking() on o.OrgId equals org.OrgId
@@ -122,7 +126,8 @@ namespace fyp_project.Controllers.Manager
                                   requestReason = o.WorkforceRequestId == null ? null : _db.WorkforceRequests.Where(r => r.WorkforceRequestId == o.WorkforceRequestId).Select(r => r.Reason).FirstOrDefault(),
                                   startsAt = o.WorkforceRequestId == null ? null : _db.WorkforceRequests.Where(r => r.WorkforceRequestId == o.WorkforceRequestId).Select(r => r.StartDatetime).FirstOrDefault(),
                                   endsAt = o.WorkforceRequestId == null ? null : _db.WorkforceRequests.Where(r => r.WorkforceRequestId == o.WorkforceRequestId).Select(r => r.EndDatetime).FirstOrDefault(),
-                                  expiresAt = o.CreatedAt.AddHours(24),
+                                  fromAi = o.Note == AutopilotService.AiOfferNote,
+                                  expiresAt = o.Note == AutopilotService.AiOfferNote ? o.CreatedAt.AddMinutes(aiMinutes) : o.CreatedAt.AddHours(24),
                               }).Take(100).ToListAsync();
             return Ok(rows);
         }

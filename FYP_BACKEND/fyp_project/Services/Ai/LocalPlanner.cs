@@ -5,7 +5,7 @@ namespace fyp_project.Services
     ///   skill (does the employee have the needed skill, how good, how many years) + rating + ownership (own organization first, then a free
     ///   employee of another organization, a spare employee lent by another organization last) + worked on this contract recently + idle.
     /// Then the pairs are taken best first, the most urgent task first; for a task that needs a skill, the employees who have it always come
-    /// before the ones who do not (those are taken only when nobody with the skill is free, and the reason says so). The FYP_AI Python service does exactly the same, so the result is
+    /// before the ones who do not (those are taken only when nobody with the skill is free, and the reason says so). Among equals the organization's own employees come before employees of other organizations, so nobody is borrowed while an own employee fits. The FYP_AI Python service does exactly the same, so the result is
     /// the same with or without it; the service is where a smarter model (OR-Tools, learning from the managers' feedback) can be added.
     /// </summary>
     public static class LocalPlanner
@@ -55,14 +55,14 @@ namespace fyp_project.Services
             var left = request.Tasks.ToDictionary(t => t.TaskId, t => t.Needed);
             var assignments = new List<PlanAssignment>();
 
-            foreach (var pair in pairs.OrderBy(p => p.Task.Priority).ThenByDescending(p => p.HasSkill).ThenByDescending(p => p.Score).ThenBy(p => p.Candidate.EmpId))
+            foreach (var pair in pairs.OrderBy(p => p.Task.Priority).ThenByDescending(p => p.HasSkill).ThenByDescending(p => p.Candidate.OwnerOrgId == p.Task.OrgId).ThenByDescending(p => p.Score).ThenBy(p => p.Candidate.EmpId))
             {
                 if (left[pair.Task.TaskId] <= 0 || used.Contains(pair.Candidate.EmpId)) continue;
                 used.Add(pair.Candidate.EmpId);
                 left[pair.Task.TaskId]--;
 
                 var others = pairs.Where(p => p.Task.TaskId == pair.Task.TaskId && p.Candidate.EmpId != pair.Candidate.EmpId)
-                    .OrderByDescending(p => p.HasSkill).ThenByDescending(p => p.Score).Take(3).Select(p => new PlanScore(p.Candidate.EmpId, p.Score)).ToList();
+                    .OrderByDescending(p => p.HasSkill).ThenByDescending(p => p.Candidate.OwnerOrgId == p.Task.OrgId).ThenByDescending(p => p.Score).Take(3).Select(p => new PlanScore(p.Candidate.EmpId, p.Score)).ToList();
 
                 assignments.Add(new PlanAssignment(pair.Task.TaskId, pair.Candidate.EmpId, pair.Score, Reason(pair), new Dictionary<string, double>
                 {

@@ -43,7 +43,7 @@ Validation/   shared validation attributes
 
 ## Run it locally
 
-1. **Database** - in SQL Server / LocalDB run `FYP_DB/WorkforceManagementDB_Complete.sql`, then every file in `FYP_DB/migrations/` in order (001, 002, 003, 005 ... 025). Optional demo data: `FYP_DB/seed/ai_demo_data.sql` (every demo password is `Ali@12345`).
+1. **Database** - in SQL Server / LocalDB run `FYP_DB/WorkforceManagementDB_Complete.sql`, then every file in `FYP_DB/migrations/` in order (001, 002, 003, 005 ... 026; the backend also creates 025/026 by itself). Optional demo data: `FYP_DB/seed/ai_demo_data.sql` (every demo password is `Ali@12345`).
 2. **Backend** - copy `FYP_BACKEND/fyp_project/appsettings.example.json` to `appsettings.json`, fill in your own values (database, Redis, JWT key, Gmail app password), then `dotnet run` inside `FYP_BACKEND/fyp_project`.
 3. **Chat server (optional)** - inside `FYP_CHAT`: `npm install`, `npm run init-env`, `npm start` (needs migration 012 and `Chat:ServiceKey` in appsettings.json).
 4. **AI planner (optional)** - see `FYP_AI/README.md`; without it the backend's built-in planner is used.

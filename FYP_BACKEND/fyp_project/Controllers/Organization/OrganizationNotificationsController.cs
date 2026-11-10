@@ -26,7 +26,7 @@ namespace fyp_project.Controllers.OrganizationPortal
             "CONTRACT_MODIFICATION_APPROVED", "CONTRACT_MODIFICATION_APPLIED", "CONTRACT_MODIFICATION_REJECTED",
         };
         private static readonly string[] RequestActions = { "WORKFORCE_REQUEST_APPROVED", "WORKFORCE_REQUEST_REJECTED" };
-        private static readonly string[] AllocationActions = { "EMPLOYEE_ALLOCATED", "EMPLOYEE_REALLOCATED", "EMPLOYEE_RELEASED", "ALLOCATION_OVERRIDE" };
+        private static readonly string[] AllocationActions = { "EMPLOYEE_ALLOCATED", "EMPLOYEE_REALLOCATED", "EMPLOYEE_RELEASED", "ALLOCATION_OVERRIDE", "AI_ALLOCATED", "AI_LOAN_STARTED", "AI_RELEASED", "AI_RECALL_REQUESTED", "AI_RECALL_COMPLETED" };
         private static readonly string[] InvoiceActions =
         {
             "INVOICE_ISSUED", "INVOICE_CANCELLED", "INVOICE_PAYMENT_RECORDED", "INVOICE_REMINDER_SENT",
@@ -52,6 +52,11 @@ namespace fyp_project.Controllers.OrganizationPortal
             ["ALLOCATION_OVERRIDE"] = "An employee started working for you",
             ["EMPLOYEE_REALLOCATED"] = "An employee was moved",
             ["EMPLOYEE_RELEASED"] = "An employee stopped working for you",
+            ["AI_ALLOCATED"] = "The AI placed an employee with you",
+            ["AI_LOAN_STARTED"] = "The AI lent an employee to you",
+            ["AI_RELEASED"] = "An employee stopped working for you",
+            ["AI_RECALL_REQUESTED"] = "A lent employee is being recalled",
+            ["AI_RECALL_COMPLETED"] = "A lent employee went back",
             ["INVOICE_ISSUED"] = "A new invoice was issued",
             ["INVOICE_CANCELLED"] = "An invoice was cancelled",
             ["INVOICE_PAYMENT_RECORDED"] = "A payment was recorded",

@@ -25,7 +25,7 @@ Optional shared secret: put `AI_SERVICE_KEY` in `.env` here and the same value i
 - `app/main.py` - the API: `GET /health`, `POST /plan`
 - `app/schemas.py` - the JSON contract (request and response)
 - `app/planner.py` - the scoring and the assignment (same as the backend's `Services/Ai/LocalPlanner.cs`)
-- `tests/test_planner.py` - run with `pytest`
+- `tests/test_planner.py`, `tests/test_api.py` - run with `pip install -r requirements-dev.txt` then `python -m pytest tests`
 
 ## How the score works (0-100)
 

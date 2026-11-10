@@ -24,6 +24,8 @@ namespace fyp_project.Services
         private const string RequestApproved = "Approved";
         /// <summary>A staff request is staffed this many minutes before it starts (and any time while it runs).</summary>
         private const int StartEarlyMinutes = 60;
+        /// <summary>The AI does not place again an employee that a person released (or whose AI decision was undone) for this long.</summary>
+        private const int ReleaseCooldownMinutes = 60;
 
         private readonly WorkforceManagementDbContext _db;
         private readonly AllocationService _allocations;
@@ -32,10 +34,10 @@ namespace fyp_project.Services
         private readonly AuditService _audit;
         private readonly IConfiguration _config;
         private readonly ILogger<AutopilotService> _logger;
-        private readonly AccountMailer _mailer;
+        private readonly IServiceScopeFactory _scopes;
 
         public AutopilotService(WorkforceManagementDbContext db, AllocationService allocations, DailyStaffingService daily, PlannerGateway planner,
-            AuditService audit, IConfiguration config, ILogger<AutopilotService> logger, AccountMailer mailer)
+            AuditService audit, IConfiguration config, ILogger<AutopilotService> logger, IServiceScopeFactory scopes)
         {
             _db = db;
             _allocations = allocations;
@@ -44,7 +46,7 @@ namespace fyp_project.Services
             _audit = audit;
             _config = config;
             _logger = logger;
-            _mailer = mailer;
+            _scopes = scopes;
         }
 
         private record TaskMeta(string Kind, int? ContractId, int? RequestId, DateTime? ExpectedEnd);
@@ -106,6 +108,35 @@ namespace fyp_project.Services
         private static bool CountsForMinimum(MinimumState state, int? workforceRequestId, int? dailyContractId) =>
             state.IsDaily ? dailyContractId == state.Contract?.ContractId : workforceRequestId == null && dailyContractId == null;
 
+        private static readonly MinimumState NoContract = new(null, false, null, "This organization has no active contract.", 0, null, 0, 0);
+
+        private static MinimumState StateOf(Dictionary<int, MinimumState> states, int orgId) => states.TryGetValue(orgId, out var s) ? s : NoContract;
+
+        /// <summary>The minimum, how many count for it and how many work there, for every organization with an active contract, in four queries.</summary>
+        private async Task<Dictionary<int, MinimumState>> AllMinimumStatesAsync()
+        {
+            var contracts = (await _db.Contracts.AsNoTracking().Where(c => c.OrgId != null && (c.Status == "Active" || c.Status == "Approved")).ToListAsync())
+                .GroupBy(c => c.OrgId!.Value).Select(g => g.OrderByDescending(c => c.ContractId).First()).ToList();
+            var ids = contracts.Select(c => c.ContractId).ToList();
+            var daily = (await _db.ContractVersions.AsNoTracking().Where(v => ids.Contains(v.ContractId)).Select(v => new { v.ContractId, v.VersionNo, v.BillingCycle }).ToListAsync())
+                .GroupBy(v => v.ContractId)
+                .Where(g => string.Equals(g.OrderByDescending(v => v.VersionNo).First().BillingCycle, DailyStaffingService.Cycle, StringComparison.OrdinalIgnoreCase))
+                .Select(g => g.Key).ToHashSet();
+            var open = (await _db.EmployeeAllocations.AsNoTracking().Where(AllocationLogic.IsOpen).Where(a => a.AssignOrgId != null)
+                .Select(a => new { Org = a.AssignOrgId!.Value, a.WorkforceRequestId, a.DailyContractId }).ToListAsync())
+                .GroupBy(a => a.Org).ToDictionary(g => g.Key, g => g.ToList());
+
+            var result = new Dictionary<int, MinimumState>();
+            foreach (var c in contracts)
+            {
+                var isDaily = daily.Contains(c.ContractId);
+                var rows = open.GetValueOrDefault(c.OrgId!.Value) ?? new();
+                var have = isDaily ? rows.Count(a => a.DailyContractId == c.ContractId) : rows.Count(a => a.WorkforceRequestId == null && a.DailyContractId == null);
+                result[c.OrgId.Value] = new MinimumState(c, isDaily, null, null, c.MinEmployees ?? 0, c.MaxEmployees, have, rows.Count);
+            }
+            return result;
+        }
+
         // ---------------------------------------------------------------- the candidates
 
         private static int LevelOf(string? proficiency) => proficiency switch { "Beginner" => 1, "Intermediate" => 2, "Advanced" => 3, "Expert" => 4, _ => 2 };
@@ -126,7 +157,19 @@ namespace fyp_project.Services
                 .Select(e => new { e.EmpId, e.OrgId, e.Rating, Name = e.User!.Name })
                 .Take(MaxFree).ToListAsync();
 
-            var list = free.Select(e => (e.EmpId, e.OrgId, e.Rating, Name: e.Name ?? $"Employee {e.EmpId}", Pool: "Free", Lender: (int?)null)).ToList();
+            // Where every other organization stands against its minimum, read once for the whole run (a few queries, however many organizations).
+            var lenderStates = allowBorrowed ? await AllMinimumStatesAsync() : new Dictionary<int, MinimumState>();
+            var list = free.Where(e => e.OrgId == orgId || e.OrgId == null).Select(e => (e.EmpId, e.OrgId, e.Rating, Name: e.Name ?? $"Employee {e.EmpId}", Pool: "Free", Lender: (int?)null)).ToList();
+
+            // A free employee of another organization can be borrowed only above what that organization still needs for its own contract
+            // minimum: its free people first fill its own missing minimum. The lowest rated are lent first, so the owner keeps its best.
+            foreach (var group in free.Where(e => e.OrgId != null && e.OrgId != orgId).GroupBy(e => e.OrgId!.Value))
+            {
+                var lenderState = StateOf(lenderStates, group.Key);
+                var spare = group.Count() - (lenderState.Contract == null ? 0 : Math.Max(0, lenderState.Min - lenderState.Have));
+                foreach (var e in group.OrderBy(e => e.Rating ?? 0).Take(Math.Max(0, spare)))
+                    list.Add((e.EmpId, e.OrgId, e.Rating, e.Name ?? $"Employee {e.EmpId}", "Free", (int?)null));
+            }
 
             if (allowBorrowed)
             {
@@ -141,7 +184,7 @@ namespace fyp_project.Services
                 {
                     var lender = group.Key;
                     if (lender == orgId) continue;
-                    var lenderState = await MinimumStateAsync(lender);
+                    var lenderState = StateOf(lenderStates, lender);
                     if (lenderState.Contract == null || lenderState.Have < lenderState.Min) continue;
 
                     // Only the lender's own people working at home (not on a staff request, not locked). Those who count for its minimum can be
@@ -226,9 +269,50 @@ namespace fyp_project.Services
             var room = (state.Max ?? int.MaxValue) - state.AtOrg;
             var allowBorrowed = contract.BorrowingAllowed == true;
             var notes = new List<string>();
+            // A person who released an employee (or undid an AI decision) keeps that choice: the AI does not place the same employee again for an hour.
+            var releasedByPerson = await _db.AllocationHistories.AsNoTracking()
+                .Where(h => h.ActionType == AllocationLogic.ActionReleased && h.FromOrgId == orgId && h.PerformedByUserId != null && h.IsAllocatedByAi != true && h.ActionTime >= now.AddMinutes(-ReleaseCooldownMinutes) && h.EmpId != null)
+                .Select(h => h.EmpId!.Value).Distinct().ToListAsync();
+            // Offers that wait for an answer count as coming; an employee who has an offer waiting, who declined this organization today or let
+            // its offer expire in the last hour is not asked again.
+            var pendingOffers = await _db.AssignmentOffers.AsNoTracking().Where(o => o.Status == AssignmentOffer.Pending)
+                .Select(o => new { o.EmpId, o.OrgId, o.Kind, o.WorkforceRequestId }).ToListAsync();
+            var saidNo = await _db.AssignmentOffers.AsNoTracking()
+                .Where(o => o.OrgId == orgId && o.RespondedAt != null && ((o.Status == AssignmentOffer.Declined && o.RespondedAt >= now.AddHours(-24)) || (o.Status == AssignmentOffer.Expired && o.RespondedAt >= now.AddMinutes(-ReleaseCooldownMinutes))))
+                .Select(o => o.EmpId).Distinct().ToListAsync();
+            var exclude = releasedByPerson.Concat(pendingOffers.Select(o => o.EmpId)).Concat(saidNo).Distinct().ToList();
 
             // 1. the contract's minimum
             var missing = state.Min - state.Have;
+            var offeredMinimum = pendingOffers.Count(o => o.OrgId == orgId && o.Kind == AssignmentOffer.ForMinimum);
+            if (missing > 0 && offeredMinimum > 0)
+            {
+                notes.Add($"{Math.Min(missing, offeredMinimum)} offer(s) wait for the employee's answer.");
+                missing -= offeredMinimum;
+            }
+            // A person who released minimum staff in the last hour wanted fewer people: those places stay empty for an hour, unless the manager
+            // presses "Place now".
+            if (missing > 0 && !(apply && trigger == "Manager"))
+            {
+                var cut = now.AddMinutes(-ReleaseCooldownMinutes);
+                var held = await (from h in _db.AllocationHistories.AsNoTracking()
+                                  join a in _db.EmployeeAllocations.AsNoTracking() on h.AllocationId equals a.AllocationId
+                                  where h.ActionType == AllocationLogic.ActionReleased && h.FromOrgId == orgId && h.PerformedByUserId != null
+                                        && h.IsAllocatedByAi != true && h.ActionTime >= cut && a.WorkforceRequestId == null && (a.Source == null || a.Source != "Loan")
+                                  select h.AllocationId).Distinct().CountAsync();
+                if (held > 0)
+                {
+                    notes.Add($"{Math.Min(missing, held)} place(s) of the minimum are kept empty for an hour because someone released staff; press Place now to fill them.");
+                    missing -= held;
+                }
+            }
+            // Employees this organization lent out and has already recalled come back by themselves: do not borrow from a third organization for them.
+            var comingBack = await _db.EmployeeLoans.CountAsync(l => l.LenderOrgId == orgId && l.Status == EmployeeLoan.RecallRequested);
+            if (missing > 0 && comingBack > 0)
+            {
+                notes.Add($"{Math.Min(missing, comingBack)} lent employee(s) are coming back.");
+                missing -= comingBack;
+            }
             if (missing > 0)
             {
                 if (state.Problem != null) notes.Add(state.Problem);
@@ -237,7 +321,7 @@ namespace fyp_project.Services
                 {
                     var needed = Math.Min(missing, room);
                     room -= needed;
-                    tasks.Add(new PlanTask("M", orgId, AiDecision.KindMinimum, needed, 0, new(), allowBorrowed, new()));
+                    tasks.Add(new PlanTask("M", orgId, AiDecision.KindMinimum, needed, 0, new(), allowBorrowed, exclude));
                     metas["M"] = new TaskMeta(AiDecision.KindMinimum, contract.ContractId, null, state.IsDaily ? state.WindowEndUtc : null);
                 }
             }
@@ -250,7 +334,7 @@ namespace fyp_project.Services
             foreach (var request in requests.OrderBy(r => PriorityOf(r.Priority)).ThenBy(r => r.WorkforceRequestId))
             {
                 var staffed = await _db.EmployeeAllocations.Where(AllocationLogic.IsOpen).CountAsync(a => a.WorkforceRequestId == request.WorkforceRequestId);
-                var wanted = (request.RequiredEmployees ?? 0) - staffed;
+                var wanted = (request.RequiredEmployees ?? 0) - staffed - pendingOffers.Count(o => o.WorkforceRequestId == request.WorkforceRequestId);
                 if (wanted <= 0) continue;
                 if (request.StartDatetime != null && request.StartDatetime > now.AddMinutes(StartEarlyMinutes))
                 {
@@ -267,7 +351,7 @@ namespace fyp_project.Services
                 room -= needed;
                 var skillIds = await _db.WorkforceRequestSkills.AsNoTracking().Where(s => s.WorkforceRequestId == request.WorkforceRequestId).Select(s => s.SkillId).ToListAsync();
                 var id = $"R{request.WorkforceRequestId}";
-                tasks.Add(new PlanTask(id, orgId, AiDecision.KindRequest, needed, PriorityOf(request.Priority), skillIds, allowBorrowed, new()));
+                tasks.Add(new PlanTask(id, orgId, AiDecision.KindRequest, needed, PriorityOf(request.Priority), skillIds, allowBorrowed, exclude));
                 metas[id] = new TaskMeta(AiDecision.KindRequest, request.ContractId, request.WorkforceRequestId, request.EndDatetime);
             }
 
@@ -313,26 +397,29 @@ namespace fyp_project.Services
             await _db.SaveChangesAsync();
 
             var applied = 0;
+            var offered = 0;
             var failed = 0;
             if (apply)
             {
                 foreach (var decision in created)
                 {
                     var (ok, _) = await ApplyAsync(decision, actorUserId);
-                    if (ok) applied++; else failed++;
+                    if (!ok) failed++;
+                    else if (decision.Status == AiDecision.Offered) offered++;
+                    else applied++;
                 }
             }
 
             var unfilled = plan.Unfilled.Sum(u => u.Missing);
             var text = apply
-                ? $"{applied} employee(s) placed" + (failed > 0 ? $", {failed} could not be placed" : string.Empty)
+                ? $"{applied} employee(s) placed" + (offered > 0 ? $", {offered} offer(s) sent to employees" : string.Empty) + (failed > 0 ? $", {failed} could not be placed" : string.Empty)
                 : $"{created.Count} suggestion(s) ready";
             if (failed > 0) text += $" ({created.FirstOrDefault(d => d.Status == AiDecision.Failed)?.Note})";
             text += ".";
             foreach (var u in plan.Unfilled)
                 text += $" {(u.TaskId == "M" ? "Minimum" : $"Request #{u.TaskId.TrimStart('R')}")}: {u.Missing} still missing - {u.Why}";
             if (notes.Count > 0) text += " " + string.Join(" ", notes);
-            return new AutopilotRunResult(orgId, org.OrgName, text + $" (planner: {plannerName})", created.Count, applied, failed, unfilled, plannerName);
+            return new AutopilotRunResult(orgId, org.OrgName, text + $" (planner: {plannerName})", created.Count, applied + offered, failed, unfilled, plannerName);
         }
 
         private static AutopilotRunResult Done(Organization org, string message) => new(org.OrgId, org.OrgName, message, 0, 0, 0, 0, LocalPlanner.Name);
@@ -341,10 +428,14 @@ namespace fyp_project.Services
 
         // ---------------------------------------------------------------- apply / reject / undo
 
-        /// <summary>Makes the allocation of a suggested decision. Every contract rule is checked by the AllocationService.</summary>
-        public async Task<(bool Ok, string Message)> ApplyAsync(AiDecision decision, int? actorUserId)
+        /// <summary>
+        /// Carries out a suggested decision. When the organization asks its employees first (the default), the employee gets an offer and the
+        /// allocation is made only when they accept (<paramref name="direct"/> true, from <see cref="AcceptOfferAsync"/>). Otherwise the
+        /// employee is placed at once. Every contract rule is checked by the AllocationService.
+        /// </summary>
+        public async Task<(bool Ok, string Message)> ApplyAsync(AiDecision decision, int? actorUserId, bool direct = false)
         {
-            if (decision.Status != AiDecision.Suggested) return (false, "This decision was already handled.");
+            if (decision.Status != AiDecision.Suggested && !(direct && decision.Status == AiDecision.Offered)) return (false, "This decision was already handled.");
 
             var employee = await _db.Employees.Include(e => e.User).FirstOrDefaultAsync(e => e.EmpId == decision.EmpId);
             var org = await _db.Organizations.AsNoTracking().FirstOrDefaultAsync(o => o.OrgId == decision.OrgId);
@@ -395,6 +486,12 @@ namespace fyp_project.Services
                     (CountsForMinimum(lenderState, lenderAllocation.WorkforceRequestId, lenderAllocation.DailyContractId) && lenderState.Have - 1 < lenderState.Min))
                     return await FailAsync(decision, "Their organization needs them for its own minimum.");
 
+            }
+
+            if (!direct && await AskEmployeesAsync(decision.OrgId)) return await SendOfferAsync(decision, employee, org, actorUserId);
+
+            if (lenderAllocation != null)
+            {
                 lenderEnd = lenderAllocation.ExpectedEndDatetime;
                 lenderDaily = lenderAllocation.DailyContractId;
                 var released = await _allocations.ReleaseAsync(lenderAllocation.AllocationId, Cut($"Lent to {org.OrgName} (AI)", 200), actorUserId, byAi: true);
@@ -425,8 +522,17 @@ namespace fyp_project.Services
             if (approval != null)
             {
                 await _audit.LogAsync(actorUserId, "WORKFORCE_REQUEST_APPROVED", "WorkforceRequest", decision.WorkforceRequestId, "Approved by the AI autopilot when it placed the first employee.");
-                try { await _mailer.SendOrganizationEventAsync(actorUserId, decision.OrgId, OrganizationEvent.StaffRequestApproved, "Approved by the AI autopilot."); }
-                catch (Exception ex) { _logger.LogWarning(ex, "Could not email the organization about request {Request}.", decision.WorkforceRequestId); }
+                // The email is sent in the background: the autopilot never waits for the mail server.
+                var (mailOrg, mailActor, mailRequest) = (decision.OrgId, actorUserId, decision.WorkforceRequestId);
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        using var scope = _scopes.CreateScope();
+                        await scope.ServiceProvider.GetRequiredService<AccountMailer>().SendOrganizationEventAsync(mailActor, mailOrg, OrganizationEvent.StaffRequestApproved, "Approved by the AI autopilot.");
+                    }
+                    catch (Exception ex) { _logger.LogWarning(ex, "Could not email the organization about request {Request}.", mailRequest); }
+                });
             }
 
             var allocation = await _db.EmployeeAllocations.FirstAsync(a => a.AllocationId == outcome.AllocationId!.Value);
@@ -460,8 +566,8 @@ namespace fyp_project.Services
 
             await _audit.LogAsync(actorUserId, loan != null ? "AI_LOAN_STARTED" : "AI_ALLOCATED", "Allocation", allocation.AllocationId,
                 loan != null
-                    ? $"{employee.User.Name} was lent by their organization to {org.OrgName} by the AI ({decision.Reason}). They go back when the work ends or when their organization needs them."
-                    : $"{employee.User.Name} was placed at {org.OrgName} by the AI ({decision.Reason}).");
+                    ? $"{employee.User.Name} was lent by their organization to {org.OrgName} by the AI. They go back when the work ends or when their organization needs them."
+                    : $"{employee.User.Name} was placed at {org.OrgName} by the AI.");
             return (true, outcome.Message);
         }
 
@@ -533,7 +639,23 @@ namespace fyp_project.Services
         /// <summary>The manager takes back an applied decision: the employee is released and free again.</summary>
         public async Task<(bool Ok, string Message)> UndoAsync(AiDecision decision, int? actorUserId)
         {
-            if (decision.Status != AiDecision.Applied || decision.AllocationId == null) return (false, "Only an applied decision can be undone.");
+            if (decision.Status == AiDecision.Offered && decision.OfferId != null)
+            {
+                var offer = await _db.AssignmentOffers.FirstOrDefaultAsync(o => o.OfferId == decision.OfferId);
+                if (offer != null && offer.Status == AssignmentOffer.Pending)
+                {
+                    offer.Status = AssignmentOffer.Cancelled;
+                    offer.RespondedAt = DateTime.UtcNow;
+                }
+                decision.Status = AiDecision.Undone;
+                decision.Note = "The offer was cancelled by the organization manager.";
+                decision.DecidedAt = DateTime.UtcNow;
+                decision.DecidedBy = actorUserId;
+                await _db.SaveChangesAsync();
+                if (offer != null) await _audit.LogAsync(actorUserId, "OFFER_CANCELLED", "AssignmentOffer", offer.OfferId, "The manager cancelled the AI's offer");
+                return (true, "The offer was cancelled.");
+            }
+            if (decision.Status != AiDecision.Applied || decision.AllocationId == null) return (false, "Only an applied decision or a waiting offer can be undone.");
             var open = await _db.EmployeeAllocations.Where(AllocationLogic.IsOpen).AnyAsync(a => a.AllocationId == decision.AllocationId);
             if (open)
             {

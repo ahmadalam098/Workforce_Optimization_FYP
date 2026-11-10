@@ -58,9 +58,24 @@ namespace fyp_project.Controllers.Admin
             _ledger = ledger;
         }
 
+        private static readonly Dictionary<string, string> AiTitles = new()
+        {
+            ["AI_ALLOCATED"] = "The AI placed an employee",
+            ["AI_LOAN_STARTED"] = "The AI lent an employee",
+            ["AI_RELEASED"] = "The AI released an employee",
+            ["AI_RECALL_REQUESTED"] = "A lent employee is being recalled",
+            ["AI_RECALL_COMPLETED"] = "A lent employee went back",
+            ["AI_DECISION_UNDONE"] = "An AI decision was undone",
+            ["AI_ALLOCATION_LOCKED"] = "An assignment was locked",
+            ["AI_ALLOCATION_UNLOCKED"] = "An assignment was unlocked",
+            ["AUTOPILOT_ON"] = "AI autopilot switched on",
+            ["AUTOPILOT_OFF"] = "AI autopilot switched off",
+        };
+
         /// <summary>"EMPLOYEE_CREATED" -> "Employee created".</summary>
         private static string TitleOf(string action)
         {
+            if (AiTitles.TryGetValue(action, out var ai)) return ai;
             var text = action.Replace('_', ' ').ToLowerInvariant();
             return text.Length == 0 ? action : char.ToUpperInvariant(text[0]) + text[1..];
         }
