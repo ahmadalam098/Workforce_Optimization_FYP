@@ -123,7 +123,7 @@ namespace fyp_project.Controllers.Manager
         [HttpGet]
         public async Task<IActionResult> List(string? search, string? category, string? source, string? status, int? organizationId, bool? forwarded, bool? severe, int page = 1, int pageSize = 10)
         {
-            page = Math.Max(1, page);
+            page = Math.Clamp(page, 1, 100000);
             pageSize = Math.Clamp(pageSize, 1, 50);
             var orgIds = await MyOrganizationIdsAsync();
             if (organizationId.HasValue && !orgIds.Contains(organizationId.Value))

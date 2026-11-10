@@ -102,7 +102,12 @@ namespace fyp_project.Controllers.Admin
                 CreatedAt = DateTime.UtcNow,
             };
             _db.SkillMasters.Add(skill);
-            await _db.SaveChangesAsync();
+            try { await _db.SaveChangesAsync(); }
+            catch (DbUpdateException)
+            {
+                // The name column cannot store every character (for example Urdu or emoji), so two such names can collapse into the same text.
+                return ConflictMessage("This skill name could not be saved. Use plain letters and digits, or pick a different name.");
+            }
 
             await _audit.LogAsync(CurrentUserId, "SKILL_CREATED", "Skill", skill.SkillId, skill.Name);
             return Ok(new { message = "Skill added.", skillId = skill.SkillId });
@@ -122,7 +127,11 @@ namespace fyp_project.Controllers.Admin
             skill.Name = name;
             skill.Category = ContractLogic.Clean(request.Category);
             skill.Description = ContractLogic.Clean(request.Description);
-            await _db.SaveChangesAsync();
+            try { await _db.SaveChangesAsync(); }
+            catch (DbUpdateException)
+            {
+                return ConflictMessage("This skill name could not be saved. Use plain letters and digits, or pick a different name.");
+            }
 
             await _audit.LogAsync(CurrentUserId, "SKILL_UPDATED", "Skill", skillId, skill.Name);
             return Ok(new { message = "Skill updated.", skillId });

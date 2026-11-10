@@ -51,6 +51,7 @@
 
 .perf-sessions button {
   width: 100%;
+  overflow-wrap: anywhere;
   padding: 0.7rem 0.9rem;
   border: none;
   border-radius: var(--radius-sm);

@@ -63,8 +63,12 @@ namespace fyp_project.Controllers.OrganizationPortal
         private readonly TokenService _tokens;
         private readonly EmailService _email;
         private readonly RedisService _redis;
+        private readonly AttemptLimiter _limiter;
 
-        public OrganizationAuthController(WorkforceManagementDbContext db, IdGenerator ids, AuditService audit, TokenService tokens, EmailService email, RedisService redis)
+        private static readonly TimeSpan LoginWindow = TimeSpan.FromMinutes(15);
+        private static readonly TimeSpan OtpWindow = TimeSpan.FromMinutes(10);
+
+        public OrganizationAuthController(WorkforceManagementDbContext db, IdGenerator ids, AuditService audit, TokenService tokens, EmailService email, RedisService redis, AttemptLimiter limiter)
         {
             _db = db;
             _ids = ids;
@@ -72,6 +76,7 @@ namespace fyp_project.Controllers.OrganizationPortal
             _tokens = tokens;
             _email = email;
             _redis = redis;
+            _limiter = limiter;
         }
 
         private IActionResult FieldError(string field, string message) =>
@@ -153,16 +158,33 @@ namespace fyp_project.Controllers.OrganizationPortal
         public async Task<IActionResult> Login([FromBody] OrganizationLoginRequest request)
         {
             var email = Clean(request.Email);
+            var failKey = "org-login:" + email.ToLowerInvariant();
+            var ipKey = "org-login-ip:" + AttemptLimiter.Ip(HttpContext);
+            if (_limiter.IsBlocked(failKey, 5, LoginWindow, out var wait) || _limiter.IsBlocked(ipKey, 30, LoginWindow, out wait))
+            {
+                Response.Headers["Retry-After"] = wait.ToString();
+                return StatusCode(429, new { message = $"Too many failed sign-in attempts. Please try again in {Math.Max(1, (wait + 59) / 60)} minute(s)." });
+            }
             var org = await _db.Organizations.FirstOrDefaultAsync(o => o.Email == email);
 
-            if (org == null) return Unauthorized(new { message = "Invalid email or password." });
+            if (org == null)
+            {
+                try { BCrypt.Net.BCrypt.Verify(request.Password ?? string.Empty, AttemptLimiter.DummyHash); } catch (Exception) { }
+                _limiter.Hit(failKey, LoginWindow); _limiter.Hit(ipKey, LoginWindow);
+                return Unauthorized(new { message = "Invalid email or password." });
+            }
             if (string.IsNullOrEmpty(org.Password))
                 return Unauthorized(new { message = "This organization has no password yet. Use \"Forgot password\" to set one." });
 
             bool correct;
             try { correct = BCrypt.Net.BCrypt.Verify(request.Password, org.Password); }
             catch (Exception) { correct = false; }
-            if (!correct) return Unauthorized(new { message = "Invalid email or password." });
+            if (!correct)
+            {
+                _limiter.Hit(failKey, LoginWindow); _limiter.Hit(ipKey, LoginWindow);
+                return Unauthorized(new { message = "Invalid email or password." });
+            }
+            _limiter.Reset(failKey);
 
             // A pending organization may sign in (to see that it waits for approval); a rejected or suspended one may not.
             if (string.Equals(org.Status, "Rejected", StringComparison.OrdinalIgnoreCase))
@@ -206,8 +228,19 @@ namespace fyp_project.Controllers.OrganizationPortal
         public async Task<IActionResult> SendOtp([FromBody] OrganizationEmailRequest request)
         {
             var email = Clean(request.Email);
+            if (!AttemptLimiter.LooksLikeEmail(email)) return FieldError("email", "Enter a valid email address.");
+            var sendKey = "org-otp-send:" + email.ToLowerInvariant();
+            var sendIpKey = "org-otp-send-ip:" + AttemptLimiter.Ip(HttpContext);
+            if (_limiter.IsBlocked(sendKey, 3, OtpWindow, out var wait) || _limiter.IsBlocked(sendIpKey, 20, OtpWindow, out wait))
+            {
+                Response.Headers["Retry-After"] = wait.ToString();
+                return StatusCode(429, new { message = $"Too many codes requested. Please try again in {Math.Max(1, (wait + 59) / 60)} minute(s)." });
+            }
+            _limiter.Hit(sendKey, OtpWindow); _limiter.Hit(sendIpKey, OtpWindow);
+
             var org = await _db.Organizations.AsNoTracking().FirstOrDefaultAsync(o => o.Email == email);
-            if (org == null) return NotFound(new { message = "No organization is registered with this email." });
+            // Same answer whether or not the e-mail is registered, so nobody can use this form to find out who has an account.
+            if (org == null) return Ok(new { message = "OTP sent successfully" });
 
             var otp = new OtpService().GenerateOtp();
             await _redis.SaveAsync($"org-otp:{email.ToLowerInvariant()}", otp, OtpMinutes);
@@ -229,10 +262,22 @@ namespace fyp_project.Controllers.OrganizationPortal
         public async Task<IActionResult> VerifyOtp([FromBody] OrganizationVerifyOtpRequest request)
         {
             var key = request.Email.Trim().ToLowerInvariant();
+            var guessKey = "org-otp-guess:" + key;
+            if (_limiter.IsBlocked(guessKey, 5, OtpWindow, out var wait))
+            {
+                await _redis.DeleteAsync($"org-otp:{key}");
+                Response.Headers["Retry-After"] = wait.ToString();
+                return StatusCode(429, new { message = "Too many wrong codes. Request a new code after a few minutes." });
+            }
             var stored = await _redis.GetAsync($"org-otp:{key}");
             if (stored == null) return BadRequest(new { message = "OTP has expired or is invalid." });
-            if (stored != request.Otp.Trim()) return BadRequest(new { message = "Invalid OTP." });
+            if (stored != request.Otp.Trim())
+            {
+                if (_limiter.Hit(guessKey, OtpWindow) >= 5) await _redis.DeleteAsync($"org-otp:{key}");
+                return BadRequest(new { message = "Invalid OTP." });
+            }
 
+            _limiter.Reset(guessKey);
             await _redis.DeleteAsync($"org-otp:{key}");
             await _redis.SaveAsync($"org-reset:{key}", "verified", ResetMinutes);
             return Ok(new { message = "OTP verified successfully." });

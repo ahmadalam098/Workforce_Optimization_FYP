@@ -94,7 +94,7 @@ namespace fyp_project.Controllers.Manager
         [HttpGet("invoices")]
         public async Task<IActionResult> Invoices(string? search, string? status, int? organizationId, bool? verified, int page = 1, int pageSize = 10)
         {
-            page = Math.Max(1, page);
+            page = Math.Clamp(page, 1, 100000);
             pageSize = Math.Clamp(pageSize, 1, 50);
             var orgIds = await MyOrganizationIdsAsync();
             var today = Money.Today;
@@ -295,7 +295,7 @@ namespace fyp_project.Controllers.Manager
         [HttpGet("payments")]
         public async Task<IActionResult> Payments(string? search, int? organizationId, bool? verified, int page = 1, int pageSize = 10)
         {
-            page = Math.Max(1, page);
+            page = Math.Clamp(page, 1, 100000);
             pageSize = Math.Clamp(pageSize, 1, 50);
             var orgIds = await MyOrganizationIdsAsync();
 

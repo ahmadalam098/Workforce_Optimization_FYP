@@ -59,6 +59,7 @@ builder.Services.AddScoped<TokenService>();
 // Admin portal services
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<IdGenerator>();
+builder.Services.AddSingleton<AttemptLimiter>();
 builder.Services.AddScoped<RoleService>();
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<ShiftService>();
@@ -302,8 +303,28 @@ if (app.Environment.IsDevelopment())
 // HTTPS REDIRECTION
 // =====================================================
 
-// The Safepay webhook comes through ngrok to http://192.168.100.17:5089; a redirect to https://localhost would never reach us, so it is left out.
+// The Safepay webhook comes through ngrok to http://localhost:5089; a redirect to https://localhost would never reach us, so it is left out.
 app.UseWhen(context => !context.Request.Path.StartsWithSegments("/api/gateway/safepay"), branch => branch.UseHttpsRedirection());
+
+
+// =====================================================
+// SECURITY HEADERS
+// =====================================================
+
+// Every response says: do not guess file types, do not allow framing, send no referrer to other sites.
+// (No CSP/HSTS here: the API serves JSON only, and HSTS belongs to the HTTPS host in front of it.)
+app.Use(async (context, next) =>
+{
+    context.Response.OnStarting(() =>
+    {
+        var h = context.Response.Headers;
+        h["X-Content-Type-Options"] = "nosniff";
+        h["X-Frame-Options"] = "DENY";
+        h["Referrer-Policy"] = "no-referrer";
+        return Task.CompletedTask;
+    });
+    await next();
+});
 
 
 // =====================================================

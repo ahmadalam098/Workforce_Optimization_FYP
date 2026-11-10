@@ -109,8 +109,8 @@ namespace fyp_project.DTOs.Admin
     public class AdjustmentLineRequest
     {
         [Required, StringLength(255), MinTrimmedLength(3)] public string Description { get; set; } = string.Empty;
-        [Range(-1000000, 1000000)] public decimal Quantity { get; set; } = 1;
-        [Range(-1000000, 1000000)] public decimal UnitRate { get; set; }
+        [Range(-1000000d, 1000000d)] public decimal Quantity { get; set; } = 1;
+        [Range(-1000000d, 1000000d)] public decimal UnitRate { get; set; }
     }
 
     public class RecordPaymentRequest
@@ -193,7 +193,7 @@ namespace fyp_project.DTOs.Admin
         /// <summary>Required when creating; ignored when editing (keys never change).</summary>
         [StringLength(50), RegularExpression(@"^[A-Z][A-Z0-9_]{2,49}$", ErrorMessage = "Use 3 to 50 capital letters, digits or _ , starting with a letter.")] public string? RuleKey { get; set; }
         [Required, StringLength(150)] public string Title { get; set; } = string.Empty;
-        [Range(0, 1000000000)] public decimal Value { get; set; }
+        [Range(0d, 1000000000d)] public decimal Value { get; set; }
         [StringLength(30)] public string? Unit { get; set; }
         [StringLength(255)] public string? Description { get; set; }
     }

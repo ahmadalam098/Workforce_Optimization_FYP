@@ -96,7 +96,8 @@ namespace fyp_project.Controllers
         {
             var stored = await _db.Users.AsNoTracking().Where(u => u.UserId == userId).Select(u => u.ProfilePicturePath).FirstOrDefaultAsync();
             var full = FullPath(stored);
-            if (full == null || !System.IO.File.Exists(full)) return NotFound();
+            // No picture is not an error: 204 keeps the browser console clean (the page then shows the initials).
+            if (full == null || !System.IO.File.Exists(full)) return NoContent();
 
             // The file name changes with every new picture, so it is a safe cache key.
             var etag = $"\"{Path.GetFileNameWithoutExtension(full)}\"";

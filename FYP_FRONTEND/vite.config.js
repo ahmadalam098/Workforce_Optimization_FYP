@@ -5,7 +5,7 @@ import { defineConfig, loadEnv } from 'vite'
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const apiTarget = env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:5089'
+  const apiTarget = env.VITE_API_PROXY_TARGET || 'https://localhost:7259'
   const chatTarget = env.VITE_CHAT_PROXY_TARGET || 'http://localhost:4000'
 
   return {

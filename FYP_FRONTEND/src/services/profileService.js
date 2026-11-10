@@ -3,7 +3,7 @@ import { apiRequest } from './apiClient.js'
 
 // Endpoints from FYP_BACKEND/fyp_project/Controllers/ProfilePictureController.cs (any signed-in role).
 
-/** URL of a user's picture. It answers 404 when the user has none. `version` forces a reload after a change. */
+/** URL of a user's picture. It answers 204 (no content) when the user has none. `version` forces a reload after a change. */
 export function pictureUrl(userId, version) {
   return `${API_BASE_URL}/api/profile/picture/${userId}${version ? `?v=${version}` : ''}`
 }

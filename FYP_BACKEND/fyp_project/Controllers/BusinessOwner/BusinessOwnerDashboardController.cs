@@ -195,7 +195,7 @@ namespace fyp_project.Controllers.BusinessOwnerPortal
             if (!await _db.Users.AnyAsync(u => u.UserId == me && u.IsActive == true))
                 return Unauthorized(new { message = "Account is inactive or no longer exists." });
 
-            page = Math.Max(1, page);
+            page = Math.Clamp(page, 1, 100000);
             pageSize = Math.Clamp(pageSize, 1, 50);
 
             var query = _db.Employees.AsNoTracking().AsQueryable();

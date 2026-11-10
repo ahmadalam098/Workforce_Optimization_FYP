@@ -80,7 +80,7 @@ namespace fyp_project.Controllers.Manager
         [HttpGet("pool")]
         public async Task<IActionResult> Pool(string? search, string? availability, int? skillId, string? view, int? organizationId = null, int page = 1, int pageSize = 10)
         {
-            page = Math.Max(1, page);
+            page = Math.Clamp(page, 1, 100000);
             pageSize = Math.Clamp(pageSize, 1, 50);
             var mine = await MyOrganizationIdsAsync();
 

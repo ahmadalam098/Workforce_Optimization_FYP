@@ -36,6 +36,7 @@
 
 /* Cards */
 .card {
+  min-width: 0; /* a card inside a grid/flex row may shrink below its content instead of widening the page */
   border: 1px solid var(--card-border);
   border-radius: var(--radius-lg);
   background: var(--card);
@@ -83,6 +84,8 @@
 /* Table */
 .table-wrap {
   overflow-x: auto;
+  /* Positioned, so the visually-hidden (absolute) labels inside the table stay inside this scroll box and do not widen the whole page. */
+  position: relative;
 }
 
 .data-table {
@@ -421,6 +424,7 @@ a.person__name:hover {
   font-weight: 500;
   color: var(--text);
   word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 /* Hero header used by details pages */

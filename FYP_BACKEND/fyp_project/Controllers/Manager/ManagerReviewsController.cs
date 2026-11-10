@@ -86,7 +86,7 @@ namespace fyp_project.Controllers.Manager
         [HttpGet]
         public async Task<IActionResult> List(string? status, bool? bad, int? orgId, string? search, int page = 1, int pageSize = 10)
         {
-            page = Math.Max(1, page);
+            page = Math.Clamp(page, 1, 100000);
             pageSize = Math.Clamp(pageSize, 1, 50);
             var query = (await MineAsync()).AsNoTracking();
             if (orgId.HasValue) query = query.Where(r => r.OrgId == orgId);

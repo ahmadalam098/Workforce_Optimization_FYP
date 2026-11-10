@@ -121,7 +121,7 @@ namespace fyp_project.Controllers.Manager
         [HttpGet]
         public async Task<IActionResult> List(string? search, string? status, string? priority, int? orgId, int page = 1, int pageSize = 10)
         {
-            page = Math.Max(1, page);
+            page = Math.Clamp(page, 1, 100000);
             pageSize = Math.Clamp(pageSize, 1, 50);
             var orgIds = await MyOrganizationIdsAsync();
             if (orgId.HasValue && !orgIds.Contains(orgId.Value)) return StatusCode(403, new { message = "You can only see the organizations you manage." });

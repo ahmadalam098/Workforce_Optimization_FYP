@@ -13,12 +13,16 @@ namespace fyp_project.Controllers
         private readonly WorkforceManagementDbContext _context;
         private readonly EmailService _emailService;
         private readonly RedisService _redisService;
+        private readonly AttemptLimiter _limiter;
+        private static readonly TimeSpan OtpWindow = TimeSpan.FromMinutes(10);
 
         public ForgetPasswordController(
            WorkforceManagementDbContext context,
             EmailService emailService,
-            RedisService redisService)
+            RedisService redisService,
+            AttemptLimiter limiter)
         {
+            _limiter = limiter;
             _context = context;
             _emailService = emailService;
             _redisService = redisService;
@@ -43,16 +47,32 @@ namespace fyp_project.Controllers
                     });
                 }
 
+                if (!AttemptLimiter.LooksLikeEmail(user.Email.Trim()))
+                {
+                    return BadRequest(new { message = "Enter a valid email address." });
+                }
+
+                // At most 3 codes per e-mail (and 20 per address) every 10 minutes.
+                var sendKey = "otp-send:" + user.Email.Trim().ToLowerInvariant();
+                var sendIpKey = "otp-send-ip:" + AttemptLimiter.Ip(HttpContext);
+                if (_limiter.IsBlocked(sendKey, 3, OtpWindow, out var wait) || _limiter.IsBlocked(sendIpKey, 20, OtpWindow, out wait))
+                {
+                    Response.Headers["Retry-After"] = wait.ToString();
+                    return StatusCode(429, new { message = $"Too many codes requested. Please try again in {Math.Max(1, (wait + 59) / 60)} minute(s)." });
+                }
+                _limiter.Hit(sendKey, OtpWindow); _limiter.Hit(sendIpKey, OtpWindow);
+
                 var existingUser = await _context.Users
                     .FirstOrDefaultAsync(
                         u => u.Email == user.Email
                     );
 
+                // Same answer whether or not the e-mail is registered, so nobody can use this form to find out who has an account.
                 if (existingUser == null)
                 {
-                    return NotFound(new
+                    return Ok(new
                     {
-                        message = "User not found"
+                        message = "OTP sent successfully"
                     });
                 }
 
@@ -91,7 +111,7 @@ namespace fyp_project.Controllers
             {
                 return StatusCode(
                     500,
-                    $"Internal server error: {ex.Message}"
+                    "Something went wrong. Please try again."
                 );
             }
         }
@@ -113,6 +133,14 @@ namespace fyp_project.Controllers
                     {
                         message = "Email and OTP are required."
                     });
+                }
+
+                var guessKey = "otp-guess:" + verify.Email.Trim().ToLowerInvariant();
+                if (_limiter.IsBlocked(guessKey, 5, OtpWindow, out var wait))
+                {
+                    await _redisService.DeleteAsync($"otp:{verify.Email}");
+                    Response.Headers["Retry-After"] = wait.ToString();
+                    return StatusCode(429, new { message = "Too many wrong codes. Request a new code after a few minutes." });
                 }
 
                 // Get OTP from Redis
@@ -139,6 +167,7 @@ namespace fyp_project.Controllers
 
                 if (storedOtp != verify.Otp)
                 {
+                    if (_limiter.Hit(guessKey, OtpWindow) >= 5) await _redisService.DeleteAsync($"otp:{verify.Email}");
                     return BadRequest(new
                     {
                         message = "Invalid OTP."
@@ -148,6 +177,7 @@ namespace fyp_project.Controllers
 
                 // OTP correct
                 // Delete OTP
+                _limiter.Reset(guessKey);
 
                 await _redisService.DeleteAsync(
                     $"otp:{verify.Email}"
@@ -174,7 +204,7 @@ namespace fyp_project.Controllers
             {
                 return StatusCode(
                     500,
-                    $"Internal server error: {ex.Message}"
+                    "Something went wrong. Please try again."
                 );
             }
         }
@@ -277,7 +307,7 @@ namespace fyp_project.Controllers
             {
                 return StatusCode(
                     500,
-                    $"Internal server error: {ex.Message}"
+                    "Something went wrong. Please try again."
                 );
             }
         }

@@ -32,6 +32,8 @@ namespace fyp_project.Services
             if (amount > balance) return new PaymentResult(false, "amount", $"The payment is more than the remaining balance ({balance:0.00} {invoice.Currency}).");
 
             var paidAt = paidAtUtc ?? DateTime.UtcNow;
+            // A payment cannot be dated in the future (one day of slack covers time zones).
+            if (paidAt > DateTime.UtcNow.AddDays(1)) return new PaymentResult(false, "paidAt", "The payment date cannot be in the future.");
             decimal? rate = invoice.Currency == ExchangeRateService.Pkr
                 ? 1m
                 : rateOverride ?? await _rates.GetRateAsync(invoice.Currency, ExchangeRateService.Pkr, DateOnly.FromDateTime(paidAt));

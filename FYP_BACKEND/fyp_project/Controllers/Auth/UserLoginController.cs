@@ -15,13 +15,17 @@ namespace fyp_project.Controllers
         private readonly TokenService _tokenService;
         private readonly EmailService _emailService;
         private readonly ILogger<UserLoginController> _logger;
+        private readonly AttemptLimiter _limiter;
+        private static readonly TimeSpan LoginWindow = TimeSpan.FromMinutes(15);
 
         public UserLoginController(
             WorkforceManagementDbContext context,
             TokenService tokenService,
             EmailService emailService,
-            ILogger<UserLoginController> logger)
+            ILogger<UserLoginController> logger,
+            AttemptLimiter limiter)
         {
+            _limiter = limiter;
             _context = context;
             _tokenService = tokenService;
             _emailService = emailService;
@@ -50,11 +54,23 @@ namespace fyp_project.Controllers
                 // 2. Find user by email
                 var email = obj.Email.Trim();
 
+                // Too many wrong passwords for this e-mail (or from this address): wait before trying again.
+                var failKey = "login:" + email.ToLowerInvariant();
+                var ipKey = "login-ip:" + AttemptLimiter.Ip(HttpContext);
+                if (_limiter.IsBlocked(failKey, 5, LoginWindow, out var wait) || _limiter.IsBlocked(ipKey, 30, LoginWindow, out wait))
+                {
+                    Response.Headers["Retry-After"] = wait.ToString();
+                    return StatusCode(429, new { message = $"Too many failed sign-in attempts. Please try again in {Math.Max(1, (wait + 59) / 60)} minute(s)." });
+                }
+
                 var user = await _context.Users
                     .FirstOrDefaultAsync(u => u.Email == email);
 
                 if (user == null)
                 {
+                    // Spend the same time as a real check, so the response time does not reveal whether the e-mail exists.
+                    try { BCrypt.Net.BCrypt.Verify(obj.Password, AttemptLimiter.DummyHash); } catch (Exception) { }
+                    _limiter.Hit(failKey, LoginWindow); _limiter.Hit(ipKey, LoginWindow);
                     return Unauthorized(new
                     {
                         message = "Invalid email or password."
@@ -106,11 +122,14 @@ namespace fyp_project.Controllers
 
                 if (!passwordVerified)
                 {
+                    _limiter.Hit(failKey, LoginWindow); _limiter.Hit(ipKey, LoginWindow);
                     return Unauthorized(new
                     {
                         message = "Invalid email or password."
                     });
                 }
+
+                _limiter.Reset(failKey);
 
                 // 5. Retrieve actual role from database
                 var role = await _context.Roles
@@ -203,7 +222,7 @@ namespace fyp_project.Controllers
                         HttpOnly = true,
 
                         // Secure cookies require HTTPS.
-                        Secure = Request.IsHttps,
+                        Secure = true,
 
                         SameSite = SameSiteMode.Strict,
 

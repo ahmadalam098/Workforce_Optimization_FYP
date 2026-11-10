@@ -259,7 +259,7 @@ namespace fyp_project.Services
                 .Concat(expenses.Select(e => new { e.when, kind = "expense", amountPkr = e.AmountPkr, e.text }))
                 .Concat(settlements.Select(s => new { s.when, kind = "sentToOwners", amountPkr = s.AmountPkr, s.text }))
                 .OrderByDescending(x => x.when).ToList();
-            page = Math.Max(1, page);
+            page = Math.Clamp(page, 1, 100000);
             pageSize = Math.Clamp(pageSize, 1, 100);
             return new { items = all.Skip((page - 1) * pageSize).Take(pageSize), total = all.Count, page, pageSize };
         }

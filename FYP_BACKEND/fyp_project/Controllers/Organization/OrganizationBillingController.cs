@@ -50,7 +50,7 @@ namespace fyp_project.Controllers.OrganizationPortal
         [HttpGet("invoices")]
         public async Task<IActionResult> Invoices(string? search, string? status, int page = 1, int pageSize = 10)
         {
-            page = Math.Max(1, page);
+            page = Math.Clamp(page, 1, 100000);
             pageSize = Math.Clamp(pageSize, 1, 50);
             var today = Money.Today;
 

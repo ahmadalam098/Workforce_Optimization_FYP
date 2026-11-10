@@ -181,7 +181,7 @@ namespace fyp_project.Controllers.Manager
             if (orgId != null) query = query.Where(d => d.OrgId == orgId);
             if (!string.IsNullOrWhiteSpace(status)) query = query.Where(d => d.Status == status);
 
-            page = Math.Max(1, page);
+            page = Math.Clamp(page, 1, 100000);
             pageSize = Math.Clamp(pageSize, 1, 50);
             var total = await query.CountAsync();
             var rows = await query.OrderByDescending(d => d.DecisionId).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();

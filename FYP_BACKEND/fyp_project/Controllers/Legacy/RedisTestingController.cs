@@ -5,6 +5,7 @@ namespace fyp_project.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
     public class RedisTestingController : ControllerBase
     {
         private readonly IConnectionMultiplexer _redis;

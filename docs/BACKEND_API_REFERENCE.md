@@ -1,7 +1,7 @@
 # Backend API Reference (from FYP_BACKEND code, reviewed 2026-10-13)
 
 Stack: ASP.NET Core (.NET 10), EF Core + SQL Server, JWT (HttpOnly cookie), Redis (OTP), MailKit (email), BCrypt.
-Dev URLs: `http://192.168.100.17:5089`, `https://localhost:7259`. OpenAPI JSON (dev): `/openapi/v1.json`.
+Dev URLs: `http://localhost:5089`, `https://localhost:7259`. OpenAPI JSON (dev): `/openapi/v1.json`.
 
 ## Auth model
 - Login sets cookie `accessToken` (HttpOnly, Secure, SameSite=Strict, 1 day). Token itself expires per `Jwt:ExpiryMinutes` (30).
@@ -646,7 +646,7 @@ Run `FYP_DB/migrations/022_online_payments.sql` (`Online_Payment`). The gateway 
 - **Config (appsettings.json only, never in git):** `"Payments": { "Gateway": "Safepay" }` and `"Safepay": { "Environment": "sandbox", "PublicKey", "SecretKey", "WebhookSecret" (optional), "ReturnBaseUrl": "http://localhost:5173" }`. A template is in `appsettings.example.json`.
 - **Safepay calls (checked against the sandbox):** `POST /order/payments/v3/` creates the tracker (amount in minor units: PKR 1,500 = 150000); `POST /client/passport/v1/token` gives the checkout token (`data`); `GET /reporter/api/v1/payments/{tracker}` gives `data.state` (`TRACKER_ENDED` = paid). Every call sends the header `X-SFPY-MERCHANT-SECRET`. Hosted page: `https://sandbox.api.getsafepay.com/embedded?environment=sandbox&tracker=..&source=hosted&tbt=..&redirect_url=..&cancel_url=..`.
 - **Flow:** the organization presses Pay online -> `POST /api/organization/payments/online` creates the tracker (kept in `Online_Payment.gateway_reference`) and returns the Safepay link -> the organization pays on Safepay -> Safepay sends the browser to `/pay/safepay/return/{token}` -> `POST /api/organization/payments/online/{token}/confirm` (`?cancelled=true` from the cancel page) -> **our server asks Safepay** for the tracker state (the browser is never trusted) -> when paid: `PaymentService.RecordAsync` (method "Online - Safepay", reference = tracker, no manager check), receipt, bells, receipt email.
-- **Webhook:** `POST /api/gateway/safepay/webhook`. Set it in the Safepay dashboard > Developer > Endpoints, for example `https://<your-ngrok-address>/api/gateway/safepay/webhook`. The signature `X-SFPY-SIGNATURE` (hex HMAC-SHA512 of the raw body with the endpoint's shared secret) is checked when `WebhookSecret` is set. The webhook only triggers the same server-side check, so even a forged one cannot mark an invoice paid. The path is left out of https redirection, because ngrok forwards to http://192.168.100.17:5089.
+- **Webhook:** `POST /api/gateway/safepay/webhook`. Set it in the Safepay dashboard > Developer > Endpoints, for example `https://<your-ngrok-address>/api/gateway/safepay/webhook`. The signature `X-SFPY-SIGNATURE` (hex HMAC-SHA512 of the raw body with the endpoint's shared secret) is checked when `WebhookSecret` is set. The webhook only triggers the same server-side check, so even a forged one cannot mark an invoice paid. The path is left out of https redirection, because ngrok forwards to http://localhost:5089.
 - **Safety nets:** a waiting checkout older than 30 minutes is checked with Safepay before it expires; the admin can press "Check with Safepay" (`POST /api/admin/online-payments/{token}/check`); `GET /api/admin/online-payments?status=&organizationId=` lists every attempt with the organization, invoice, amount, tracker and the totals received.
 - **Sandbox test card (Safepay docs):** 4456 5300 0000 1005, expiry 03/28, CVC 111 (no 3DS step).
 - **Screens:** Organization > Payments (Pay online, I paid another way, Your online payments) and the invoice page (Pay online).
@@ -673,3 +673,15 @@ Run `FYP_DB/migrations/025_ai_autopilot.sql` (`Autopilot_Setting`, `AI_Decision`
 - **Demo data:** `FYP_DB/seed/ai_demo_data.sql` (after 025); `ai_demo_refresh.sql` makes the demo requests current again. Every demo account's password is `Ali@12345`.
 - **Employee consent (migration 026, created at start by `AiSchema` when missing):** `PUT /api/manager/autopilot/{orgId}/ask-employees { enabled }` (default true). When true the AI sends an assignment offer (`Assignment_Offer.note` = "Sent by the AI autopilot"; `AI_Decision.status` = Offered with `offer_id`) and places the employee only when they accept in My Assignments (`POST /api/employee/offers/{id}/accept` hands an AI offer to the autopilot, so lending works too). Declined -> Declined (not asked again by that organization for 24 h); no answer within `Ai:OfferMinutes` (10) -> Expired; waiting offers count as coming. `GET /api/manager/autopilot` also returns `offerMinutes` and, per organization, `askEmployees` and `offersWaiting`; `GET /api/employee/offers` returns `fromAi` and the real expiry. Undo on an Offered decision cancels the offer.
 - **Ends and holds:** every open, unlocked assignment whose end time passed is released by the worker (AI or manual; audit `AI_RELEASED` / `EMPLOYEE_RELEASED`). Minimum staff released by a person (or an undone AI decision) keeps that place empty for 60 minutes; "Place now" (`run { apply: true }` by the manager) fills it at once. The approval email of a request is sent in the background. AI audit texts no longer contain the scoring reasons (those stay in AI_Decision).
+
+## Security hardening (QA round, 2026-11)
+
+- **Login lockout** (`UserLogin/loginUser`, `organization/auth/login`): 5 wrong passwords for one e-mail, or 30 from one address, inside 15 minutes -> `429` with `Retry-After`. A correct login resets the e-mail counter. Unknown e-mails spend the same BCrypt time as real ones (no timing leak).
+- **OTP** (`ForgetPassword/*`, `organization/auth/*`): max 3 codes per e-mail and 20 per address per 10 minutes (`429`); 5 wrong codes delete the OTP and block for 10 minutes. `send-otp` answers `200 "OTP sent successfully"` even for an unknown e-mail (no account enumeration) and `400` for a malformed e-mail. Counters live in memory (`Services/Auth/AttemptLimiter.cs`): a backend restart clears them.
+- **Number validation**: money/rate fields use `[Range(…d, …d)]` (double bounds), so huge values give `400`, not `500`.
+- **Payments** cannot be dated more than one day in the future.
+- **Paging**: `page` is clamped to 1–100000 everywhere.
+- **Skills**: a name the database cannot store (Urdu/emoji collapsing to the same text) returns `409`, not `500`.
+- `GET /api/profile/picture/{userId}` answers `204` (not `404`) when the user has no picture.
+- `GET /api/RedisTesting/redis` is Admin-only.
+- Every API response carries `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`.

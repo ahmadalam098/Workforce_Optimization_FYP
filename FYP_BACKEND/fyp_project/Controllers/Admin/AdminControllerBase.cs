@@ -59,6 +59,6 @@ namespace fyp_project.Controllers.Admin
                 : null;
 
         protected static (int page, int pageSize) NormalizePaging(int page, int pageSize) =>
-            (Math.Max(page, 1), Math.Clamp(pageSize, 1, 100));
+            (Math.Clamp(page, 1, 100000), Math.Clamp(pageSize, 1, 100));
     }
 }

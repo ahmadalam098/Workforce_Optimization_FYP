@@ -22,8 +22,8 @@ namespace fyp_project.DTOs.Admin
         [StringLength(10)] public string? BillingCurrency { get; set; }
         [StringLength(30)] public string? BillingCycle { get; set; }
 
-        [Range(0, 100000)] public decimal? BaseHourlyRate { get; set; }
-        [Range(0, 100000)] public decimal? ExtraHourlyRate { get; set; }
+        [Range(0d, 100000d)] public decimal? BaseHourlyRate { get; set; }
+        [Range(0d, 100000d)] public decimal? ExtraHourlyRate { get; set; }
     }
 
     public class UpdateContractRequest : ContractTermsDto
